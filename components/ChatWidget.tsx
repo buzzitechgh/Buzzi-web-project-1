@@ -15,7 +15,7 @@ const ChatWidget: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! 👋 I'm the Buzzitech AI Assistant. I can check device prices for you or initiate a real-time call. How can I help?",
+      text: "Hello! 👋 Welcome to Buzzitech.\n\nI can help you with:\n• Starlink & CCTV Prices 💰\n• Booking an Installation 📅\n• Requesting a Call Back 📞\n\nHow can I help you today?",
       sender: 'bot',
       timestamp: new Date()
     }
@@ -33,14 +33,47 @@ const ChatWidget: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping, isOpen]);
 
-  // Trigger vibration effect periodically
+  // Initial Auto-Open, Welcome Sequence & Auto-Close
+  useEffect(() => {
+    let openTimeout: ReturnType<typeof setTimeout>;
+    let closeTimeout: ReturnType<typeof setTimeout>;
+
+    // 1. Wait 2.5 seconds after page load (let user see the hero section first)
+    const startSequenceTimer = setTimeout(() => {
+      // 2. Start Vibrate to grab attention
+      setIsVibrating(true);
+      
+      // 3. Open the chat window after vibrating for 1 second
+      openTimeout = setTimeout(() => {
+        setIsVibrating(false);
+        setIsOpen(true);
+
+        // 4. Auto-minimize after 30 seconds
+        closeTimeout = setTimeout(() => {
+          setIsOpen((prev) => {
+            // Only close if user hasn't already closed it (though setting false is safe)
+            return false;
+          });
+        }, 30000);
+
+      }, 1000);
+    }, 2500);
+
+    return () => {
+      clearTimeout(startSequenceTimer);
+      clearTimeout(openTimeout);
+      clearTimeout(closeTimeout);
+    };
+  }, []);
+
+  // Periodic Reminder Vibration (only if closed)
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isOpen) {
         setIsVibrating(true);
         setTimeout(() => setIsVibrating(false), 1000);
       }
-    }, 10000);
+    }, 15000); // Remind every 15 seconds if closed
     return () => clearInterval(interval);
   }, [isOpen]);
 

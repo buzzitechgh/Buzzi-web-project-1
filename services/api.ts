@@ -1,4 +1,5 @@
 import { ContactFormData, AppointmentFormData, QuoteFormData } from '../types';
+import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
 
 // Points to the local Node.js server (from server/server.js)
 const BACKEND_URL = 'http://localhost:5000/api';
@@ -73,29 +74,48 @@ export const api = {
     return { success: true, message: "Quotation request received. We will contact you shortly." };
   },
 
-  // Chatbot remains client-side mock for now
+  // Intelligent Chatbot Logic utilizing Knowledge Base
   sendChatMessage: async (message: string): Promise<{ text: string, action?: string }> => {
-    await delay(1000);
-    const lowerMsg = message.toLowerCase();
+    await delay(800); // Natural reading delay
+    const lowerMsg = message.toLowerCase().trim();
 
-    if (lowerMsg.includes('call') || lowerMsg.includes('speak') || lowerMsg.includes('talk')) {
+    // 1. Special Trigger: Call Action
+    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human')) {
        return { text: "I can have our AI Voice Assistant call you immediately. Please enter your phone number." };
     }
 
+    // 2. Special Trigger: Phone Number Detection
     const phoneMatch = message.match(/(\+233|0)\d{9}/);
     if (phoneMatch) {
        console.log(`[Simulation] Triggering call to ${phoneMatch[0]}`);
-       return { text: `Thanks! I'm initiating a call to ${phoneMatch[0]} right now using our AI Agent.` };
+       return { text: `Thanks! I'm initiating a call to ${phoneMatch[0]} right now using our AI Agent. Please keep your line open.` };
     }
 
-    if (lowerMsg.includes('price') || lowerMsg.includes('cost') || lowerMsg.includes('quote')) {
-        if (lowerMsg.includes('starlink')) return { text: "🛰️ **Starlink Pricing**:\n- Standard Kit: ~GHS 8,500\n- Installation: GHS 800 - GHS 1,500" };
-        if (lowerMsg.includes('cctv')) return { text: "📹 **CCTV Packages**:\n- 4-Channel Kit: ~GHS 3,200\n- 8-Channel Kit: ~GHS 5,500" };
-        if (lowerMsg.includes('pos')) return { text: "💻 **POS Systems**:\n- Full Setup: ~GHS 4,500" };
-        
-        return { text: "I can give you prices for Starlink, CCTV, or POS systems. What are you interested in?" };
+    // 3. Knowledge Base Search Algorithm
+    let bestMatch = null;
+    let highestScore = 0;
+
+    KNOWLEDGE_BASE.forEach(entry => {
+      let score = 0;
+      entry.keywords.forEach(keyword => {
+        if (lowerMsg.includes(keyword)) {
+          // Boost score for exact matches or longer keywords (usually more specific)
+          score += 1 + (keyword.length * 0.1); 
+        }
+      });
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = entry;
+      }
+    });
+
+    // Threshold for accepting a match (prevents weak matches)
+    if (bestMatch && highestScore > 0.5) {
+      return { text: bestMatch.answer };
     }
 
-    return { text: "I can help with **Prices** or I can **Call You**. Try asking: 'How much is Starlink?'" };
+    // 4. Fallback
+    return { text: FALLBACK_ANSWER };
   }
 };
