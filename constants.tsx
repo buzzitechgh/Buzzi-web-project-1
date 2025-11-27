@@ -15,13 +15,14 @@ import {
   Zap,
   Satellite,
   Globe,
-  ShoppingCart
+  ShoppingCart,
+  Headset
 } from 'lucide-react';
 import { ServiceItem, Testimonial } from './types';
 
 export const COMPANY_INFO = {
   name: "Buzzitech IT Solutions & Services",
-  phone: "0507480623",
+  phone: "050 748 0623 / 054 470 9829",
   whatsapp: "233507480623", 
   email: "buzzitechgh@gmail.com",
   address: "Accra, Ghana"
@@ -73,6 +74,18 @@ export const SERVICES: ServiceItem[] = [
     title: 'Hardware Support',
     description: 'Expert repairs for Personal Computers, Servers, Smartphones & Tablets.',
     icon: Cpu
+  },
+  {
+    id: 'remote-support',
+    title: 'Remote Support',
+    description: 'Instant technical troubleshooting, system diagnosis, and software maintenance performed remotely.',
+    icon: Headset
+  },
+  {
+    id: 'consultation',
+    title: 'IT Consultation',
+    description: 'Strategic technology planning, digital transformation advice, and infrastructure auditing for your business.',
+    icon: Lightbulb
   }
 ];
 

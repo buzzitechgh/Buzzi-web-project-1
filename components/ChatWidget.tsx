@@ -9,6 +9,50 @@ interface Message {
   timestamp: Date;
 }
 
+// Sound Utility using Web Audio API to avoid external asset dependencies
+const playSound = (type: 'popup' | 'message') => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+
+    if (type === 'popup') {
+      // Pop Sound (Open): Quick upward frequency sweep
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(400, now);
+      oscillator.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.05, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.1);
+
+    } else if (type === 'message') {
+      // Dropdown/Message Sound: Soft "bubble" or "blip"
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(800, now);
+      oscillator.frequency.exponentialRampToValueAtTime(400, now + 0.15);
+      
+      gainNode.gain.setValueAtTime(0.03, now); // Lower volume for messages
+      gainNode.gain.linearRampToValueAtTime(0, now + 0.15);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.15);
+    }
+  } catch (error) {
+    console.error("Audio play failed", error);
+  }
+};
+
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isVibrating, setIsVibrating] = useState(false);
@@ -33,6 +77,23 @@ const ChatWidget: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping, isOpen]);
 
+  // Sound Effects
+  useEffect(() => {
+    if (isOpen) {
+      playSound('popup');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    // Only play sound for new messages (skip initial load)
+    if (messages.length > 1) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.sender === 'bot') {
+        playSound('message');
+      }
+    }
+  }, [messages]);
+
   // Initial Auto-Open, Welcome Sequence & Auto-Close
   useEffect(() => {
     let openTimeout: ReturnType<typeof setTimeout>;
@@ -46,12 +107,11 @@ const ChatWidget: React.FC = () => {
       // 3. Open the chat window after vibrating for 1 second
       openTimeout = setTimeout(() => {
         setIsVibrating(false);
-        setIsOpen(true);
+        setIsOpen(true); // Triggers 'popup' sound via useEffect
 
         // 4. Auto-minimize after 30 seconds
         closeTimeout = setTimeout(() => {
           setIsOpen((prev) => {
-            // Only close if user hasn't already closed it (though setting false is safe)
             return false;
           });
         }, 30000);
@@ -101,7 +161,7 @@ const ChatWidget: React.FC = () => {
         sender: 'bot',
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, botResponse]);
+      setMessages(prev => [...prev, botResponse]); // Triggers 'message' sound via useEffect
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, {
