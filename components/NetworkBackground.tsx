@@ -20,7 +20,6 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
     // Set canvas size
     const setSize = () => {
       // If the canvas is not fixed (i.e., inside a container), use parent dimensions
-      // Check if className contains 'fixed' to decide sizing strategy, or just check parent
       if (canvas.parentElement && getComputedStyle(canvas).position !== 'fixed') {
          width = canvas.parentElement.clientWidth;
          height = canvas.parentElement.clientHeight;
@@ -34,16 +33,15 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
     };
     setSize();
 
-    // Configuration
+    // Configuration for subtle effect
     const config = {
-      // Slightly different colors for visual depth
-      particleColor: 'rgba(59, 130, 246)', 
-      lineColor: 'rgba(147, 197, 253)', // Lighter blue for lines
-      mouseLineColor: 'rgba(59, 130, 246)', // Brighter blue for mouse interaction
-      particleCount: Math.min(Math.floor((width * height) / 15000), 60), // Sparse for "silent" feel
-      connectionDistance: 180,
-      interactionDistance: 250, // Distance for mouse interaction
-      baseSpeed: 0.2
+      particleColor: '59, 130, 246', // RGB: Brand Blue
+      lineColor: '147, 197, 253',    // RGB: Lighter Blue
+      particleCount: Math.min(Math.floor((width * height) / 20000), 50), // Sparse density
+      connectionDistance: 160,
+      interactionDistance: 200,
+      baseSpeed: 0.15, // Slow movement
+      mouseForce: 0.02 // Gentle pull
     };
 
     class Particle {
@@ -60,33 +58,37 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
         this.y = Math.random() * height;
         this.vx = (Math.random() - 0.5) * config.baseSpeed;
         this.vy = (Math.random() - 0.5) * config.baseSpeed;
-        this.size = Math.random() * 1.5 + 1; // Slightly varied size
+        this.size = Math.random() * 1.5 + 1; 
+        
         // Sine wave properties for smooth fading
         this.oscillation = Math.random() * Math.PI * 2;
-        this.oscillationSpeed = 0.01 + Math.random() * 0.02;
+        this.oscillationSpeed = 0.005 + Math.random() * 0.01;
       }
 
       update() {
         this.x += this.vx;
         this.y += this.vy;
 
-        // Bounce off edges
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
+        // Wrap around edges for continuous flow
+        if (this.x < 0) this.x = width;
+        else if (this.x > width) this.x = 0;
+        
+        if (this.y < 0) this.y = height;
+        else if (this.y > height) this.y = 0;
 
         // Oscillate alpha
         this.oscillation += this.oscillationSpeed;
       }
 
-      // Calculate alpha dynamically
+      // Calculate alpha dynamically (Breathing effect)
       getAlpha() {
-        return 0.05 + Math.abs(Math.sin(this.oscillation)) * 0.25; // range 0.05 to 0.3
+        // Returns value between 0.1 and 0.4
+        return 0.1 + (Math.sin(this.oscillation) + 1) * 0.15;
       }
 
       draw() {
         if (!ctx) return;
-        ctx.globalAlpha = this.getAlpha();
-        ctx.fillStyle = config.particleColor;
+        ctx.fillStyle = `rgba(${config.particleColor}, ${this.getAlpha()})`;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fill();
@@ -96,7 +98,7 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
     const particles: Particle[] = [];
     const init = () => {
       particles.length = 0;
-      const count = Math.min(Math.floor((width * height) / 15000), 60); // Recalculate count on resize
+      const count = Math.min(Math.floor((width * height) / 20000), 50);
       for (let i = 0; i < count; i++) {
         particles.push(new Particle());
       }
@@ -104,10 +106,6 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
     init();
 
     const handleMouseMove = (e: MouseEvent) => {
-        // If absolute/relative, we need to account for offset if we want mouse interaction relative to canvas
-        // But for visual simplicity, clientX/Y works if canvas covers screen or we adjust.
-        // For 'upper front page' (Hero), clientY might need adjustment if scrolled, but Hero is at top.
-        
         if (canvas.style.position === 'fixed') {
              mouseRef.current = { x: e.clientX, y: e.clientY };
         } else {
@@ -124,7 +122,6 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
       const mx = mouseRef.current.x;
       const my = mouseRef.current.y;
 
-      // Update and draw particles
       particles.forEach((p, index) => {
         p.update();
         const pAlpha = p.getAlpha();
@@ -135,22 +132,21 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
         const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
         if (distMouse < config.interactionDistance) {
-            // Attraction force: gently pull particle towards mouse
-            if (distMouse > 50) { // Don't collapse completely
-                 const force = (config.interactionDistance - distMouse) / config.interactionDistance;
-                 p.x -= dxMouse * force * 0.03;
-                 p.y -= dyMouse * force * 0.03;
-            }
+            const force = (config.interactionDistance - distMouse) / config.interactionDistance;
+            
+            // Gentle attraction
+            p.x -= dxMouse * force * config.mouseForce;
+            p.y -= dyMouse * force * config.mouseForce;
 
-            // Draw connection line to mouse
-            ctx.beginPath();
-            const mouseLineAlpha = (1 - distMouse / config.interactionDistance) * 0.4;
-            ctx.strokeStyle = config.mouseLineColor;
-            ctx.globalAlpha = mouseLineAlpha;
-            ctx.lineWidth = 0.8;
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(mx, my);
-            ctx.stroke();
+            // Draw faint line to mouse
+            if (distMouse < config.interactionDistance * 0.8) {
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(${config.lineColor}, ${0.2 * (1 - distMouse / config.interactionDistance)})`;
+                ctx.lineWidth = 0.5;
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(mx, my);
+                ctx.stroke();
+            }
         }
 
         // 2. Peer Connections (Node to Node)
@@ -162,14 +158,11 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
 
           if (dist < config.connectionDistance) {
             ctx.beginPath();
-            // Line opacity based on distance and both particle alphas
-            // This creates the "fade silently" effect where connections disappear smoothly
-            const p2Alpha = p2.getAlpha();
-            const distanceFactor = 1 - dist / config.connectionDistance;
-            const lineAlpha = distanceFactor * Math.min(pAlpha, p2Alpha) * 0.4; // subtle lines
+            // Line opacity based on distance and particle life
+            const distFactor = 1 - dist / config.connectionDistance;
+            const lineAlpha = distFactor * Math.min(pAlpha, p2.getAlpha()) * 0.8; 
             
-            ctx.strokeStyle = config.lineColor;
-            ctx.globalAlpha = lineAlpha;
+            ctx.strokeStyle = `rgba(${config.lineColor}, ${lineAlpha})`;
             ctx.lineWidth = 0.5;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p2.x, p2.y);
@@ -177,7 +170,6 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
           }
         }
         
-        // Draw particle last to be on top of lines
         p.draw();
       });
 
@@ -206,7 +198,6 @@ const NetworkBackground: React.FC<NetworkBackgroundProps> = ({ className }) => {
     <canvas
       ref={canvasRef}
       className={combinedClasses}
-      style={{ mixBlendMode: 'normal' }}
     />
   );
 };

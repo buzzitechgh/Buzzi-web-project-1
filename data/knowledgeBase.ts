@@ -2,13 +2,39 @@ import { COMPANY_INFO } from "../constants";
 
 export interface KnowledgeEntry {
   id: string;
-  category: 'pricing' | 'service' | 'general' | 'support';
+  category: 'pricing' | 'service' | 'general' | 'support' | 'company';
   keywords: string[];
   answer: string;
 }
 
 export const KNOWLEDGE_BASE: KnowledgeEntry[] = [
-  // --- COMPANY & GENERAL ---
+  // --- COMPANY INFORMATION (History, Vision, Values) ---
+  {
+    id: 'company-history',
+    category: 'company',
+    keywords: ['history', 'founded', 'start', 'background', 'origin', 'story', 'since'],
+    answer: "📜 **Our History**\n\nBuzzitech was founded to address the growing need for professional, enterprise-grade IT services in Ghana. We started as a small consultancy and have grown into a full-service IT solutions provider, building digital foundations for businesses across West Africa."
+  },
+  {
+    id: 'company-vision',
+    category: 'company',
+    keywords: ['vision', 'future', 'goal', 'aim', 'objective'],
+    answer: "🚀 **Our Vision**\n\nTo be the leading IT infrastructure and support provider in West Africa, recognized for excellence, innovation, and unwavering reliability."
+  },
+  {
+    id: 'company-mission',
+    category: 'company',
+    keywords: ['mission', 'purpose', 'why'],
+    answer: "🎯 **Our Mission**\n\nTo empower businesses in Ghana with reliable, cutting-edge IT solutions that enhance productivity, security, and operational efficiency."
+  },
+  {
+    id: 'company-values',
+    category: 'company',
+    keywords: ['values', 'culture', 'principles', 'integrity', 'trust', 'stand for'],
+    answer: "💎 **Our Core Values**\n\n• **Integrity**: We build trust through transparency.\n• **Customer-Centricity**: Your success is our priority.\n• **Innovation**: We stay ahead of technology trends.\n• **Reliability**: We are there when you need us."
+  },
+
+  // --- GENERAL & CONTACT ---
   {
     id: 'overview',
     category: 'general',
@@ -91,6 +117,14 @@ export const KNOWLEDGE_BASE: KnowledgeEntry[] = [
     keywords: ['hotspot', 'billing system', 'wifi voucher', 'hotel wifi', 'hotspot maintenance'],
     answer: "📶 **WiFi Hotspot Billing System**\n\nFor hotels, campuses, and public spaces. Integrates with Paystack and Momo.\n\n**Prices:**\n- Hotspot Setup: **GHS 1,200 – 2,500**\n- Monthly Maintenance: **GHS 150 – 300**"
   },
+  
+  // Business Automation & POS
+  {
+    id: 'business-automation',
+    category: 'service',
+    keywords: ['business automation', 'pos system', 'point of sale', 'inventory', 'retail software', 'automation tool'],
+    answer: "🛍️ **Business Automation & POS**\n\nWe provide complete retail and business management solutions:\n\n- **POS Systems:** Hardware & Software for shops/malls.\n- **Inventory Management:** Track stock in real-time.\n- **Automation:** Streamline sales and reporting."
+  },
 
   // Computer Services
   {
@@ -153,4 +187,4 @@ export const KNOWLEDGE_BASE: KnowledgeEntry[] = [
   }
 ];
 
-export const FALLBACK_ANSWER = "I can help with pricing and details for **CCTV**, **Starlink**, **Networking**, **Web Design**, **Computer Repairs**, and **Hotspots**. \n\nYou can also call us directly at **" + COMPANY_INFO.phone + "**.";
+export const FALLBACK_ANSWER = "I can help with pricing and details for **CCTV**, **Starlink**, **Networking**, **Web Design**, **Business Automation**, and **Computer Repairs**. \n\nYou can also call us directly at **" + COMPANY_INFO.phone + "**.";

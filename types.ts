@@ -34,12 +34,22 @@ export interface AppointmentFormData {
   serviceType: string;
 }
 
+export interface QuoteItem {
+  id: string;
+  category: string;
+  name: string;
+  description?: string; // New: Specific details for this line item
+  price: number;
+  quantity: number;
+}
+
 export interface QuoteFormData {
   name: string;
   email: string;
   phone: string;
-  serviceType: string;
-  description: string;
-  budget: string;
+  serviceType: string; // General Service Category
+  items: QuoteItem[];
+  description: string; // General Notes
+  grandTotal: number;
   timeline: string;
 }

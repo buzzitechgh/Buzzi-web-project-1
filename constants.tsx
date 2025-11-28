@@ -29,7 +29,7 @@ export const COMPANY_INFO = {
 };
 
 export const N8N_WEBHOOK_URL = "https://your-n8n-instance.com/webhook/buzzitech-forms";
-export const N8N_CHAT_WEBHOOK_URL = "https://your-n8n-instance.com/webhook/buzzitech-chat";
+export const N8N_CHAT_WEBHOOK_URL = "https://vmi2920096.contaboserver.net/webhook-test/2be5ffdd-dd0c-420a-9a5f-07a9bc361ee3";
 
 // Updated to match the specific list provided by the client
 export const SERVICES: ServiceItem[] = [
@@ -59,8 +59,8 @@ export const SERVICES: ServiceItem[] = [
   },
   {
     id: 'pos',
-    title: 'Point of Sale (POS)',
-    description: 'Complete POS hardware and software setup for retail shops, restaurants, and supermarkets.',
+    title: 'Business Automation & POS',
+    description: 'Complete Point of Sale setup, inventory management software, and business process automation tools.',
     icon: ShoppingCart
   },
   {

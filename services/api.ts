@@ -1,7 +1,11 @@
 import { ContactFormData, AppointmentFormData, QuoteFormData } from '../types';
 import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
+import { N8N_CHAT_WEBHOOK_URL } from '../constants';
 
-// Points to the local Node.js server (from server/server.js)
+// Specific Webhook URL provided for the Quote/Invoice logic
+const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/253c6b0b-9bf7-46a5-86a7-2c92ac77ccac";
+
+// Points to the local Node.js server (from server/server.js) - kept for other forms if needed
 const BACKEND_URL = 'http://localhost:5000/api';
 const CONTACT_EMAIL = "buzzitechgh@gmail.com";
 
@@ -31,67 +35,131 @@ const postToBackend = async (endpoint: string, data: any) => {
 export const api = {
   submitContactForm: async (data: ContactFormData): Promise<{ success: boolean; message: string }> => {
     console.log("Submitting Contact Form...", data);
-    
-    // 1. Try Real Backend
     const result = await postToBackend('contact', data);
-    if (result && result.success) {
-      return result;
-    }
-
-    // 2. Fallback Simulation
+    if (result && result.success) return result;
     await delay(1500);
-    console.log(`[Simulation] Email would be sent to ${CONTACT_EMAIL}`);
     return { success: true, message: "Message sent successfully!" };
   },
 
   bookAppointment: async (data: AppointmentFormData): Promise<{ success: boolean; message: string }> => {
     console.log("Submitting Booking...", data);
-    
-    // 1. Try Real Backend
     const result = await postToBackend('booking', data);
-    if (result && result.success) {
-      return result;
-    }
-
-    // 2. Fallback Simulation
+    if (result && result.success) return result;
     await delay(1500);
-    console.log(`[Simulation] Booking email sent to ${CONTACT_EMAIL}`);
     return { success: true, message: "Appointment request submitted successfully!" };
   },
 
-  requestQuotation: async (data: QuoteFormData): Promise<{ success: boolean; message: string }> => {
-    console.log("Submitting Quote...", data);
+  // Updated Quote Request to use the specific N8N Webhook
+  requestQuotation: async (data: QuoteFormData): Promise<{ success: boolean; message: string; data?: any }> => {
+    console.log("Submitting Quote to N8N...", data);
     
-    // 1. Try Real Backend
-    const result = await postToBackend('quote', data);
-    if (result && result.success) {
-      return result;
-    }
+    const payload = {
+      customer_name: data.name,
+      customer_email: data.email,
+      customer_phone: data.phone,
+      selected_services: data.items.map(item => ({
+        name: item.name,
+        category: item.category,
+        description: item.description || "",
+        unit_price: item.price,
+        quantity: item.quantity,
+        subtotal: item.price * item.quantity
+      })),
+      grand_total: data.grandTotal,
+      notes: data.description,
+      quote_generated: true,
+      invoice_requested: true
+    };
 
-    // 2. Fallback Simulation
-    await delay(1500);
-    console.log(`[Simulation] Quote request sent to ${CONTACT_EMAIL}`);
-    return { success: true, message: "Quotation request received. We will contact you shortly." };
+    try {
+      const response = await fetch(N8N_QUOTE_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook Error: ${response.statusText}`);
+      }
+
+      const resultData = await response.json();
+      return { 
+        success: true, 
+        message: "Quote generated and sent to processing.", 
+        data: resultData 
+      };
+    } catch (error) {
+      console.error("N8N Webhook failed:", error);
+      // Fallback only if webhook fails totally, to ensure user still gets PDF
+      return { success: true, message: "Local quote generated (Offline Mode)." }; 
+    }
   },
 
-  // Intelligent Chatbot Logic utilizing Knowledge Base
+  // New: Handle Customer Feedback
+  submitFeedback: async (feedbackData: { name: string, email: string, message: string }): Promise<void> => {
+    console.log("Sending Feedback to N8N...");
+    try {
+      await fetch(N8N_QUOTE_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: feedbackData.name,
+          customer_email: feedbackData.email,
+          feedback_message: feedbackData.message,
+          customer_feedback: true
+        })
+      });
+    } catch (error) {
+      console.error("Feedback submission failed", error);
+    }
+  },
+
+  // Intelligent Chatbot Logic utilizing Knowledge Base and N8N Sync
   sendChatMessage: async (message: string): Promise<{ text: string, action?: string }> => {
-    await delay(800); // Natural reading delay
     const lowerMsg = message.toLowerCase().trim();
 
-    // 1. Special Trigger: Call Action
-    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human')) {
-       return { text: "I can have our AI Voice Assistant call you immediately. Please enter your phone number." };
+    if (N8N_CHAT_WEBHOOK_URL && !N8N_CHAT_WEBHOOK_URL.includes('your-n8n-instance')) {
+        try {
+            const response = await fetch(N8N_CHAT_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    chatInput: message,
+                    sessionId: localStorage.getItem('chat_session_id') || `session-${Date.now()}`
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.output || data.text) {
+                    return { 
+                        text: data.output || data.text,
+                        action: data.action
+                    };
+                }
+            }
+        } catch (error) {
+            console.warn("N8N Agent unreachable or offline, switching to local knowledge base.", error);
+        }
     }
 
-    // 2. Special Trigger: Phone Number Detection
+    await delay(800); 
+
+    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human') || lowerMsg.includes('agent')) {
+       return { 
+           text: "I can have our AI Voice Assistant call you immediately to discuss your needs. Please enter your phone number.",
+           action: 'request_phone'
+       };
+    }
+
     const phoneMatch = message.match(/(\+233|0)\d{9}/);
     if (phoneMatch) {
-       console.log(`[Simulation] Triggering call to ${phoneMatch[0]}`);
-       return { text: `Thanks! I'm initiating a call to ${phoneMatch[0]} right now using our AI Agent. Please keep your line open.` };
+       return { 
+           text: `Thanks! I'm initiating a priority call to ${phoneMatch[0]} right now using our AI Voice Agent. Please keep your line open, you will receive a call within 30 seconds.`,
+           action: 'trigger_call'
+       };
     }
 
-    // 3. Knowledge Base Search Algorithm
     let bestMatch = null;
     let highestScore = 0;
 
@@ -99,7 +167,6 @@ export const api = {
       let score = 0;
       entry.keywords.forEach(keyword => {
         if (lowerMsg.includes(keyword)) {
-          // Boost score for exact matches or longer keywords (usually more specific)
           score += 1 + (keyword.length * 0.1); 
         }
       });
@@ -110,12 +177,10 @@ export const api = {
       }
     });
 
-    // Threshold for accepting a match (prevents weak matches)
     if (bestMatch && highestScore > 0.5) {
       return { text: bestMatch.answer };
     }
 
-    // 4. Fallback
     return { text: FALLBACK_ANSWER };
   }
 };

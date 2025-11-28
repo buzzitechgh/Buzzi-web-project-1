@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Phone, Bot, Loader2 } from 'lucide-react';
+import { X, Send, MessageSquare, Bot, Loader2, ChevronDown, Mic, MicOff } from 'lucide-react';
 import { api } from '../services/api';
+import { SERVICES } from '../constants';
 
 interface Message {
   id: number;
@@ -9,8 +10,14 @@ interface Message {
   timestamp: Date;
 }
 
+// Interface for Web Speech API support
+interface IWindow extends Window {
+  webkitSpeechRecognition: any;
+  SpeechRecognition: any;
+}
+
 // Sound Utility using Web Audio API to avoid external asset dependencies
-const playSound = (type: 'popup' | 'message') => {
+const playSound = (type: 'popup' | 'message' | 'sent') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -37,7 +44,7 @@ const playSound = (type: 'popup' | 'message') => {
       oscillator.stop(now + 0.1);
 
     } else if (type === 'message') {
-      // Dropdown/Message Sound: Soft "bubble" or "blip"
+      // Dropdown/Incoming Message Sound: Soft "bubble" or "blip"
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(800, now);
       oscillator.frequency.exponentialRampToValueAtTime(400, now + 0.15);
@@ -47,6 +54,18 @@ const playSound = (type: 'popup' | 'message') => {
       
       oscillator.start(now);
       oscillator.stop(now + 0.15);
+
+    } else if (type === 'sent') {
+      // Sent Message Sound: Crisp high-pitch "tick"
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(1200, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1800, now + 0.05);
+      
+      gainNode.gain.setValueAtTime(0.02, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.05);
     }
   } catch (error) {
     console.error("Audio play failed", error);
@@ -59,14 +78,28 @@ const ChatWidget: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! 👋 Welcome to Buzzitech.\n\nI can help you with:\n• Starlink & CCTV Prices 💰\n• Booking an Installation 📅\n• Requesting a Call Back 📞\n\nHow can I help you today?",
+      text: "Hello! 👋 Welcome to Buzzitech.\n\nI can help you with:\n• Starlink & CCTV Prices 💰\n• Business Automation 🛍️\n• Booking an Installation 📅\n• Requesting a Call Back 📞\n\nHow can I help you today?",
       sender: 'bot',
       timestamp: new Date()
     }
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [selectedService, setSelectedService] = useState(""); // Controlled state for select
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Common Services List for Quick Actions
+  const QUICK_TOPICS = [
+    "CCTV Security",
+    "Starlink Internet",
+    "Networking",
+    "Web Design",
+    "Business Automation",
+    "Call Me"
+  ];
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -148,6 +181,8 @@ const ChatWidget: React.FC = () => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
+    playSound('sent'); // Play sent sound
+    
     setInputValue("");
     setIsTyping(true);
 
@@ -179,6 +214,95 @@ const ChatWidget: React.FC = () => {
     if (e.key === 'Enter') handleSendMessage();
   };
 
+  const handleServiceSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const service = e.target.value;
+    if (service) {
+      // Reset logic: Update state first, then send message
+      setSelectedService(""); // Reset to default immediately
+      handleSendMessage(`Tell me more about ${service}`);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.warn("Error stopping recognition", e);
+        }
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
+    const SpeechRecognitionConstructor = SpeechRecognition || webkitSpeechRecognition;
+
+    if (!SpeechRecognitionConstructor) {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: "Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.",
+        sender: 'bot',
+        timestamp: new Date()
+      }]);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionConstructor();
+      recognitionRef.current = recognition;
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false; // Stop after one sentence
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInputValue(transcript);
+          handleSendMessage(transcript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          // Instead of alert, show a helpful message in chat
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            text: "🎤 Permission Denied.\nTo use voice chat, please allow microphone access in your browser settings (click the lock icon in the URL bar).",
+            sender: 'bot',
+            timestamp: new Date()
+          }]);
+        } else if (event.error === 'no-speech') {
+            // Ignore no-speech errors, just reset state
+            return;
+        }
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.error("Failed to initialize speech recognition", e);
+      setIsListening(false);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: "Unable to start voice input. Please ensure your microphone is connected.",
+        sender: 'bot',
+        timestamp: new Date()
+      }]);
+    }
+  };
+
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end space-y-4">
       <style>{`
@@ -192,6 +316,14 @@ const ChatWidget: React.FC = () => {
         }
         .animate-wiggle {
           animation: wiggle 1s ease-in-out;
+        }
+        /* Hide scrollbar for cleaner look */
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
 
@@ -247,38 +379,72 @@ const ChatWidget: React.FC = () => {
              <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Actions (Only show if messages length is low to prompt user) */}
-          {messages.length < 4 && (
-             <div className="bg-slate-50 px-4 pb-2 flex gap-2 overflow-x-auto">
-                <button onClick={() => handleSendMessage("How much is Starlink?")} className="flex-shrink-0 text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full hover:bg-primary-50 transition">
-                  💰 Starlink Price
-                </button>
-                <button onClick={() => handleSendMessage("Call me")} className="flex-shrink-0 text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full hover:bg-primary-50 transition">
-                  📞 Call Me
-                </button>
-                <button onClick={() => handleSendMessage("CCTV Camera Prices")} className="flex-shrink-0 text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full hover:bg-primary-50 transition">
-                  📹 CCTV Cost
-                </button>
+          {/* Quick Actions (Expanded List) */}
+          {messages.length < 5 && (
+             <div className="bg-slate-50 px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+                {QUICK_TOPICS.map((topic) => (
+                   <button 
+                     key={topic}
+                     onClick={() => handleSendMessage(topic === "Call Me" ? "Call Me" : `Tell me about ${topic}`)} 
+                     className="flex-shrink-0 text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full hover:bg-primary-50 transition shadow-sm whitespace-nowrap"
+                   >
+                     {topic === "Call Me" ? "📞 Call Me" : topic}
+                   </button>
+                ))}
              </div>
           )}
 
           {/* Input Area */}
-          <div className="bg-white p-3 border-t border-gray-100 flex items-center space-x-2">
-            <input 
-              type="text" 
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Ask about prices or request a call..." 
-              className="flex-grow bg-slate-100 text-slate-900 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all placeholder:text-slate-400"
-            />
-            <button 
-              onClick={() => handleSendMessage()}
-              disabled={!inputValue.trim() || isTyping}
-              className="bg-primary-600 text-white p-2.5 rounded-full hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md"
-            >
-              {isTyping ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-            </button>
+          <div className="bg-white p-3 border-t border-gray-100 flex flex-col gap-2">
+            
+            {/* Service Selection Dropdown */}
+            <div className="relative">
+              <select 
+                className="w-full text-xs bg-slate-50 border border-gray-200 text-slate-600 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer appearance-none"
+                onChange={handleServiceSelect}
+                value={selectedService} // Controlled value
+              >
+                <option value="" disabled>Select a topic to inquire...</option>
+                {SERVICES.map((service) => (
+                  <option key={service.id} value={service.title}>
+                    {service.title}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input 
+                type="text" 
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ask a question..." 
+                className="flex-grow bg-slate-100 text-slate-900 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all placeholder:text-slate-400"
+              />
+              
+              {/* Voice Input Button */}
+              <button
+                onClick={handleVoiceInput}
+                className={`p-2.5 rounded-full transition-colors shadow-md flex-shrink-0 ${
+                  isListening 
+                    ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' 
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+                title={isListening ? "Listening..." : "Voice Input"}
+              >
+                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+
+              <button 
+                onClick={() => handleSendMessage()}
+                disabled={!inputValue.trim() || isTyping}
+                className="bg-primary-600 text-white p-2.5 rounded-full hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md flex-shrink-0"
+              >
+                {isTyping ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+              </button>
+            </div>
           </div>
         </div>
       )}
