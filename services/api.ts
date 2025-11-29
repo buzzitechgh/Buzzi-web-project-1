@@ -3,7 +3,7 @@ import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
 import { N8N_CHAT_WEBHOOK_URL } from '../constants';
 
 // Specific Webhook URL provided for the Quote/Invoice logic
-const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/253c6b0b-9bf7-46a5-86a7-2c92ac77ccac";
+const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/379a1c65-dc25-4840-ade1-9f23f6afb446";
 
 // Points to the local Node.js server (from server/server.js) - kept for other forms if needed
 const BACKEND_URL = 'http://localhost:5000/api';
