@@ -51,41 +51,60 @@ const Checkout: React.FC = () => {
     }
 
     setGeoLoading(true);
+
+    const successCallback = (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      setCustomer(prev => ({
+        ...prev,
+        gpsCoordinates: coords,
+        address: prev.address ? `${prev.address} \n(GPS: ${coords})` : `GPS: ${coords}`
+      }));
+      setGeoLoading(false);
+    };
+
+    const errorCallback = (error: GeolocationPositionError) => {
+      console.error("Geolocation Error:", error);
+      
+      let errorMessage = "Unable to retrieve your location.";
+      switch(error.code) {
+        case 1: // PERMISSION_DENIED
+          errorMessage = "Location permission denied. Please enable location access in your browser settings.";
+          break;
+        case 2: // POSITION_UNAVAILABLE
+          errorMessage = "Location information is unavailable. Please check your GPS settings or enter address manually.";
+          break;
+        case 3: // TIMEOUT
+          errorMessage = "The request to get your location timed out.";
+          break;
+        default:
+          errorMessage = `Location error: ${error.message}`;
+      }
+      
+      alert(errorMessage);
+      setGeoLoading(false);
+    };
+
+    // First try with High Accuracy
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        setCustomer(prev => ({
-          ...prev,
-          gpsCoordinates: coords,
-          address: prev.address ? `${prev.address} \n(GPS: ${coords})` : `GPS: ${coords}`
-        }));
-        setGeoLoading(false);
-      },
+      successCallback,
       (error) => {
-        console.error("Geolocation Error Code:", error.code, "Message:", error.message);
-        
-        let errorMessage = "Unable to retrieve your location.";
-        switch(error.code) {
-          case 1: // PERMISSION_DENIED
-            errorMessage = "Location permission denied. Please enable location access in your browser settings.";
-            break;
-          case 2: // POSITION_UNAVAILABLE
-            errorMessage = "Location information is unavailable. Please check your GPS settings.";
-            break;
-          case 3: // TIMEOUT
-            errorMessage = "The request to get your location timed out.";
-            break;
-          default:
-            errorMessage = `Location error: ${error.message}`;
+        // If High Accuracy fails (Timeout or Unavailable), try Low Accuracy
+        if (error.code === 2 || error.code === 3) {
+           console.log("High accuracy failed, attempting low accuracy fallback...");
+           navigator.geolocation.getCurrentPosition(
+             successCallback,
+             errorCallback,
+             { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+           );
+        } else {
+           // If Permission Denied, fail immediately
+           errorCallback(error);
         }
-        
-        alert(errorMessage);
-        setGeoLoading(false);
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 15000, 
+        timeout: 8000, 
         maximumAge: 0 
       }
     );
