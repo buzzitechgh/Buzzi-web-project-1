@@ -53,3 +53,38 @@ export interface QuoteFormData {
   grandTotal: number;
   timeline: string;
 }
+
+// --- E-COMMERCE TYPES ---
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  image: string;
+  description: string;
+  features: string[];
+  stock: number;
+}
+
+export interface CartItem extends Product {
+  quantity: number;
+}
+
+export interface Order {
+  id: string;
+  items: CartItem[];
+  total: number;
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    region: string;
+    gpsCoordinates?: string;
+  };
+  deliveryMode: 'delivery' | 'pickup';
+  paymentMethod: 'paystack' | 'momo' | 'cod';
+  status: 'pending' | 'completed';
+  date: Date;
+}

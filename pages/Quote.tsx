@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, CheckCircle, ChevronDown, Plus, Trash2, ShoppingCart, Info, MessageSquare, Send } from 'lucide-react';
+import { FileText, Download, CheckCircle, ChevronDown, ChevronUp, Plus, Trash2, ShoppingCart, Info, MessageSquare, Send } from 'lucide-react';
 import Button from '../components/Button';
 import { api } from '../services/api';
 import { QuoteFormData, QuoteItem } from '../types';
@@ -330,7 +330,7 @@ const Quote: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                         
                         {/* Category Select */}
-                        <div className="md:col-span-4">
+                        <div className="md:col-span-3">
                           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Category</label>
                           <div className="relative">
                             <select 
@@ -352,7 +352,7 @@ const Quote: React.FC = () => {
                         </div>
 
                         {/* Item Select */}
-                        <div className="md:col-span-6">
+                        <div className="md:col-span-5">
                           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Item</label>
                           <div className="relative">
                             <select 
@@ -373,25 +373,31 @@ const Quote: React.FC = () => {
                         {/* Quantity */}
                         <div className="md:col-span-2">
                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Qty</label>
-                           <input 
-                             type="number" 
-                             min="1" 
-                             value={quantity} 
-                             onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                             className={inputClass}
-                           />
-                        </div>
-
-                        {/* Description Input */}
-                        <div className="md:col-span-10">
-                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Item Description / Details (Optional)</label>
-                            <input 
-                              type="text"
-                              value={itemDescription}
-                              onChange={(e) => setItemDescription(e.target.value)}
-                              placeholder="e.g., Mounting location, specific color, or cable length..."
-                              className={inputClass}
-                            />
+                           <div className="relative">
+                             <input 
+                               type="number" 
+                               min="1" 
+                               value={quantity} 
+                               onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                               className={`${inputClass} pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+                             />
+                             <div className="absolute inset-y-0 right-0 flex flex-col border-l border-gray-300 w-8">
+                                <button 
+                                  type="button"
+                                  onClick={() => setQuantity(q => q + 1)}
+                                  className="flex-1 hover:bg-gray-50 text-slate-600 flex items-center justify-center rounded-tr-lg border-b border-gray-300 focus:outline-none"
+                                >
+                                  <ChevronUp size={12} />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                                  className="flex-1 hover:bg-gray-50 text-slate-600 flex items-center justify-center rounded-br-lg focus:outline-none"
+                                >
+                                  <ChevronDown size={12} />
+                                </button>
+                             </div>
+                           </div>
                         </div>
 
                         {/* Add Button */}
@@ -401,8 +407,20 @@ const Quote: React.FC = () => {
                               onClick={handleAddItem}
                               className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition flex items-center justify-center shadow-sm"
                             >
-                              <Plus size={20} /> <span className="md:hidden ml-2">Add</span>
+                              <Plus size={20} /> <span className="ml-2 font-medium">Add</span>
                             </button>
+                        </div>
+
+                        {/* Description Input */}
+                        <div className="md:col-span-12">
+                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Item Description / Details (Optional)</label>
+                            <input 
+                              type="text"
+                              value={itemDescription}
+                              onChange={(e) => setItemDescription(e.target.value)}
+                              placeholder="e.g., Mounting location, specific color, or cable length..."
+                              className={inputClass}
+                            />
                         </div>
                     </div>
                  </div>

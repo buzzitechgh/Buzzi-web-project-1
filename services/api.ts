@@ -1,9 +1,9 @@
-import { ContactFormData, AppointmentFormData, QuoteFormData } from '../types';
+import { ContactFormData, AppointmentFormData, QuoteFormData, Order } from '../types';
 import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
 import { N8N_CHAT_WEBHOOK_URL } from '../constants';
 
 // Specific Webhook URL provided for the Quote/Invoice logic
-const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/379a1c65-dc25-4840-ade1-9f23f6afb446";
+const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/quote-manual-final";
 
 // Points to the local Node.js server (from server/server.js) - kept for other forms if needed
 const BACKEND_URL = 'http://localhost:5000/api';
@@ -49,6 +49,32 @@ export const api = {
     return { success: true, message: "Appointment request submitted successfully!" };
   },
 
+  // E-COMMERCE PAYMENT PROCESSING
+  processPayment: async (order: Order): Promise<{ success: boolean; transactionId: string }> => {
+    console.log(`Processing ${order.paymentMethod} Payment for GHS ${order.total}`, order);
+    await delay(3000); // Simulate processing time
+    
+    // Simulate webhooks/backend recording
+    try {
+        await fetch(N8N_QUOTE_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...order,
+                type: 'STORE_ORDER',
+                paymentStatus: 'SUCCESS'
+            })
+        });
+    } catch (e) {
+        console.warn("Could not log order to N8N");
+    }
+
+    return { 
+        success: true, 
+        transactionId: `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}` 
+    };
+  },
+
   // Updated Quote Request to use the specific N8N Webhook
   requestQuotation: async (data: QuoteFormData): Promise<{ success: boolean; message: string; data?: any }> => {
     console.log("Submitting Quote to N8N...", data);
@@ -79,7 +105,7 @@ export const api = {
       });
 
       if (!response.ok) {
-        throw new Error(`Webhook Error: ${response.statusText}`);
+        throw new Error(`Webhook Error: ${response.status} ${response.statusText}`);
       }
 
       const resultData = await response.json();
@@ -89,7 +115,8 @@ export const api = {
         data: resultData 
       };
     } catch (error) {
-      console.error("N8N Webhook failed:", error);
+      // Log as warning instead of error since we have a fallback
+      console.warn("N8N Webhook unreachable, switching to offline generation.", error);
       // Fallback only if webhook fails totally, to ensure user still gets PDF
       return { success: true, message: "Local quote generated (Offline Mode)." }; 
     }
@@ -110,7 +137,7 @@ export const api = {
         })
       });
     } catch (error) {
-      console.error("Feedback submission failed", error);
+      console.warn("Feedback submission failed", error);
     }
   },
 
@@ -118,6 +145,55 @@ export const api = {
   sendChatMessage: async (message: string): Promise<{ text: string, action?: string }> => {
     const lowerMsg = message.toLowerCase().trim();
 
+    // 1. Phone / Action Detection (High Priority)
+    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human') || lowerMsg.includes('agent')) {
+       await delay(500);
+       return { 
+           text: "I can have our AI Voice Assistant call you immediately to discuss your needs. Please enter your phone number.",
+           action: 'request_phone'
+       };
+    }
+
+    const phoneMatch = message.match(/(\+233|0)\d{9}/);
+    if (phoneMatch) {
+       await delay(800);
+       return { 
+           text: `Thanks! I'm initiating a priority call to ${phoneMatch[0]} right now using our AI Voice Agent. Please keep your line open, you will receive a call within 30 seconds.`,
+           action: 'trigger_call'
+       };
+    }
+
+    // 2. Check Local Knowledge Base (Medium Priority - Accurate Company Info & Troubleshooting)
+    let bestMatch = null;
+    let highestScore = 0;
+
+    KNOWLEDGE_BASE.forEach(entry => {
+      let score = 0;
+      entry.keywords.forEach(keyword => {
+        if (lowerMsg.includes(keyword.toLowerCase())) {
+          // Weighted scoring: Longer keywords usually mean more specific matches
+          score += 1 + (keyword.length * 0.1);
+          
+          // Boost score significantly if it's a direct topic match (e.g. from buttons)
+          if (lowerMsg === keyword.toLowerCase() || lowerMsg === `tell me about ${keyword.toLowerCase()}` || lowerMsg.includes(`about ${keyword.toLowerCase()}`)) {
+             score += 10;
+          }
+        }
+      });
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = entry;
+      }
+    });
+
+    // If we have a confident match in local KB, use it.
+    if (bestMatch && highestScore >= 1.0) {
+      await delay(600); // Simulate "typing"
+      return { text: bestMatch.answer, action: bestMatch.action }; // Include action trigger
+    }
+
+    // 3. Fallback to N8N AI Agent (Low Priority - General Queries)
     if (N8N_CHAT_WEBHOOK_URL && !N8N_CHAT_WEBHOOK_URL.includes('your-n8n-instance')) {
         try {
             const response = await fetch(N8N_CHAT_WEBHOOK_URL, {
@@ -139,48 +215,11 @@ export const api = {
                 }
             }
         } catch (error) {
-            console.warn("N8N Agent unreachable or offline, switching to local knowledge base.", error);
+            console.warn("N8N Agent unreachable or offline, switching to fallback.", error);
         }
     }
 
-    await delay(800); 
-
-    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human') || lowerMsg.includes('agent')) {
-       return { 
-           text: "I can have our AI Voice Assistant call you immediately to discuss your needs. Please enter your phone number.",
-           action: 'request_phone'
-       };
-    }
-
-    const phoneMatch = message.match(/(\+233|0)\d{9}/);
-    if (phoneMatch) {
-       return { 
-           text: `Thanks! I'm initiating a priority call to ${phoneMatch[0]} right now using our AI Voice Agent. Please keep your line open, you will receive a call within 30 seconds.`,
-           action: 'trigger_call'
-       };
-    }
-
-    let bestMatch = null;
-    let highestScore = 0;
-
-    KNOWLEDGE_BASE.forEach(entry => {
-      let score = 0;
-      entry.keywords.forEach(keyword => {
-        if (lowerMsg.includes(keyword)) {
-          score += 1 + (keyword.length * 0.1); 
-        }
-      });
-
-      if (score > highestScore) {
-        highestScore = score;
-        bestMatch = entry;
-      }
-    });
-
-    if (bestMatch && highestScore > 0.5) {
-      return { text: bestMatch.answer };
-    }
-
+    await delay(500);
     return { text: FALLBACK_ANSWER };
   }
 };

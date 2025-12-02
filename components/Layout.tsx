@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram } from 'lucide-react';
+import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart } from 'lucide-react';
 import { COMPANY_INFO } from '../constants';
 import ChatWidget from './ChatWidget';
 import Logo from './Logo';
 import NetworkCursor from './NetworkCursor';
+import { useCart } from '../context/CartContext';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+  const { totalItems, lastAdded } = useCart();
+  
+  // Animation states
+  const [isBumping, setIsBumping] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -23,8 +29,29 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setIsMenuOpen(false);
   }, [location]);
 
+  // Trigger "Bump" animation when an item is added
+  useEffect(() => {
+    if (lastAdded > 0) {
+      setIsBumping(true);
+      const timer = setTimeout(() => setIsBumping(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [lastAdded]);
+
+  // Trigger periodic "Shake/Vibrate" if items exist to encourage checkout
+  useEffect(() => {
+    if (totalItems > 0) {
+      const interval = setInterval(() => {
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 1000);
+      }, 5000); // Shake every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [totalItems]);
+
   const navLinks = [
     { name: 'Home', path: '/' },
+    { name: 'Store', path: '/store' },
     { name: 'Services', path: '/services' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },
@@ -33,8 +60,28 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen relative">
-      {/* Global Background Effects - NetworkBackground removed from here to be placed in Home */}
+      {/* Global Background Effects */}
       <NetworkCursor />
+
+      {/* Styles for Cart Animations */}
+      <style>{`
+        @keyframes cart-bump {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+        @keyframes cart-shake {
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-15deg); }
+          75% { transform: rotate(15deg); }
+        }
+        .animate-cart-bump {
+          animation: cart-bump 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .animate-cart-shake {
+          animation: cart-shake 0.5s ease-in-out;
+        }
+      `}</style>
 
       {/* Header */}
       <header className={`fixed w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-white shadow-md py-2' : 'bg-transparent py-4'}`}>
@@ -47,7 +94,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </Link>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex space-x-8 items-center">
+            <nav className="hidden md:flex space-x-6 items-center">
               {navLinks.map((link) => (
                 <Link
                   key={link.path}
@@ -63,6 +110,22 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   {link.name}
                 </Link>
               ))}
+              
+              {/* Cart Icon */}
+              <Link 
+                to="/checkout" 
+                className={`relative p-2 rounded-full transition-colors ${
+                  isScrolled ? 'text-slate-800 hover:bg-slate-100' : 'text-white hover:bg-white/10'
+                } ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
+              >
+                <ShoppingCart size={20} />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                    {totalItems}
+                  </span>
+                )}
+              </Link>
+
               <Link
                 to="/quote"
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -75,13 +138,29 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </Link>
             </nav>
 
-            {/* Mobile Menu Button */}
-            <button
-              className="md:hidden p-2 rounded-md text-slate-600 hover:bg-slate-100"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              {isMenuOpen ? <X /> : <Menu className={isScrolled ? "text-slate-900" : "text-slate-900 md:text-white"} />}
-            </button>
+            {/* Mobile Menu Button & Cart */}
+            <div className="flex items-center gap-4 md:hidden">
+              <Link 
+                to="/checkout" 
+                className={`relative p-2 rounded-full ${
+                  isScrolled ? 'text-slate-800' : 'text-white'
+                } ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
+              >
+                <ShoppingCart size={22} />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                    {totalItems}
+                  </span>
+                )}
+              </Link>
+
+              <button
+                className="p-2 rounded-md text-slate-600 hover:bg-slate-100"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                {isMenuOpen ? <X /> : <Menu className={isScrolled ? "text-slate-900" : "text-slate-900 md:text-white"} />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -145,7 +224,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div>
               <h3 className="text-white font-semibold mb-4">Quick Links</h3>
               <ul className="space-y-2">
-                <li><Link to="/about" className="hover:text-primary-400 transition">About Us</Link></li>
+                <li><Link to="/store" className="hover:text-primary-400 transition">Shop Devices</Link></li>
                 <li><Link to="/services" className="hover:text-primary-400 transition">Our Services</Link></li>
                 <li><Link to="/contact" className="hover:text-primary-400 transition">Contact Support</Link></li>
                 <li><Link to="/booking" className="hover:text-primary-400 transition">Book Appointment</Link></li>

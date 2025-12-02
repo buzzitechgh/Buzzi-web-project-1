@@ -2,6 +2,6 @@
   "name": "Buzzitech IT Solutions and Services",
   "description": "Professional corporate website for Buzzitech IT Solutions & Services, featuring service listings, appointment booking, and quotation requests.",
   "requestFramePermissions": [
-    "microphone"
+    "geolocation"
   ]
 }

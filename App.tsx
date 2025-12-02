@@ -9,6 +9,8 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import Booking from './pages/Booking';
 import Quote from './pages/Quote';
+import Store from './pages/Store';
+import Checkout from './pages/Checkout';
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +37,8 @@ const App: React.FC = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/booking" element={<Booking />} />
           <Route path="/quote" element={<Quote />} />
+          <Route path="/store" element={<Store />} />
+          <Route path="/checkout" element={<Checkout />} />
         </Routes>
       </Layout>
     </Router>

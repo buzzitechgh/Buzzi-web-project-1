@@ -78,7 +78,7 @@ const ChatWidget: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! 👋 Welcome to Buzzitech.\n\nI can help you with:\n• Starlink & CCTV Prices 💰\n• Business Automation 🛍️\n• Booking an Installation 📅\n• Requesting a Call Back 📞\n\nHow can I help you today?",
+      text: "Hello! 👋 Welcome to Buzzitech.\n\nI can help you with:\n• Starlink & CCTV Prices 💰\n• Business Automation 🛍️\n• Booking an Installation 📅\n• Getting an Instant Quote 📝\n\nHow can I help you today?",
       sender: 'bot',
       timestamp: new Date()
     }
@@ -88,16 +88,33 @@ const ChatWidget: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [selectedService, setSelectedService] = useState(""); // Controlled state for select
   
+  // Interactive Quote Flow State
+  const [quoteFlow, setQuoteFlow] = useState<{
+    active: boolean;
+    step: 'NAME' | 'EMAIL' | 'PHONE' | 'SERVICE' | 'DETAILS';
+    data: {
+      name: string;
+      email: string;
+      phone: string;
+      service: string;
+      details: string;
+    }
+  }>({
+    active: false,
+    step: 'NAME',
+    data: { name: '', email: '', phone: '', service: '', details: '' }
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
   // Common Services List for Quick Actions
   const QUICK_TOPICS = [
+    "Get Quote",
     "CCTV Security",
     "Starlink Internet",
     "Networking",
     "Web Design",
-    "Business Automation",
     "Call Me"
   ];
 
@@ -132,7 +149,7 @@ const ChatWidget: React.FC = () => {
     let openTimeout: ReturnType<typeof setTimeout>;
     let closeTimeout: ReturnType<typeof setTimeout>;
 
-    // 1. Wait 2.5 seconds after page load (let user see the hero section first)
+    // 1. Wait 1 second after page load (let user see the hero section first)
     const startSequenceTimer = setTimeout(() => {
       // 2. Start Vibrate to grab attention
       setIsVibrating(true);
@@ -150,7 +167,7 @@ const ChatWidget: React.FC = () => {
         }, 30000);
 
       }, 1000);
-    }, 2500);
+    }, 1000);
 
     return () => {
       clearTimeout(startSequenceTimer);
@@ -170,6 +187,97 @@ const ChatWidget: React.FC = () => {
     return () => clearInterval(interval);
   }, [isOpen]);
 
+  // Process Interactive Quote Steps
+  const processQuoteStep = async (inputText: string) => {
+    // 1. Update Data based on current step
+    let newData = { ...quoteFlow.data };
+    let nextStep = quoteFlow.step;
+    let botResponseText = "";
+
+    switch (quoteFlow.step) {
+        case 'NAME':
+            newData.name = inputText;
+            nextStep = 'EMAIL';
+            botResponseText = `Thanks ${inputText}! What is your **Email Address** so we can send the estimate?`;
+            break;
+        case 'EMAIL':
+            if (!inputText.includes('@') || !inputText.includes('.')) {
+                 setMessages(prev => [...prev, { id: Date.now(), text: "That doesn't look like a valid email. Please try again.", sender: 'bot', timestamp: new Date() }]);
+                 return;
+            }
+            newData.email = inputText;
+            nextStep = 'PHONE';
+            botResponseText = "Got it. What is your **Phone Number**?";
+            break;
+        case 'PHONE':
+            newData.phone = inputText;
+            nextStep = 'SERVICE';
+            botResponseText = "Which **Service** are you interested in? (e.g., CCTV, Starlink, Networking, POS)";
+            break;
+        case 'SERVICE':
+            newData.service = inputText;
+            nextStep = 'DETAILS';
+            botResponseText = "Please provide specific **details or requirements** (e.g., number of cameras, location, specific hardware).";
+            break;
+        case 'DETAILS':
+            newData.details = inputText;
+            // No next step, we submit
+            botResponseText = "Perfect! Generating your estimate now...";
+            break;
+    }
+
+    setQuoteFlow({ active: true, step: nextStep as any, data: newData });
+
+    // Add Bot Response
+    setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: botResponseText,
+        sender: 'bot',
+        timestamp: new Date()
+    }]);
+
+    // If we just finished DETAILS, submit immediately
+    if (quoteFlow.step === 'DETAILS') {
+        const payload: any = {
+             name: newData.name,
+             email: newData.email,
+             phone: newData.phone,
+             serviceType: newData.service,
+             items: [{
+                 id: 'chat-gen-' + Date.now(),
+                 category: 'Chat Request',
+                 name: newData.service,
+                 description: newData.details,
+                 price: 0, // Indicative
+                 quantity: 1
+             }],
+             grandTotal: 0,
+             description: `[Generated via Chatbot]\nUser Requirements: ${newData.details}`,
+             timeline: 'Flexible'
+        };
+
+        try {
+            await api.requestQuotation(payload);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: "✅ **Quote Request Sent!**\n\nI've forwarded your details to our team and emailed a confirmation to " + newData.email + ". We will review your requirements and send a formal estimate shortly.",
+                sender: 'bot',
+                timestamp: new Date()
+            }]);
+        } catch (e) {
+             setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: "⚠️ Something went wrong connecting to the server. Please try the Quote page from the menu instead.",
+                sender: 'bot',
+                timestamp: new Date()
+            }]);
+        }
+        
+        // Reset Flow
+        setQuoteFlow({ active: false, step: 'NAME', data: { name: '', email: '', phone: '', service: '', details: '' } });
+    }
+  };
+
   const handleSendMessage = async (text: string = inputValue) => {
     if (!text.trim()) return;
 
@@ -186,10 +294,25 @@ const ChatWidget: React.FC = () => {
     setInputValue("");
     setIsTyping(true);
 
+    // INTERCEPT IF QUOTE FLOW IS ACTIVE
+    if (quoteFlow.active) {
+        setTimeout(() => {
+             processQuoteStep(text);
+             setIsTyping(false);
+        }, 800);
+        return;
+    }
+
     try {
       // API call to N8N wrapper
       const response = await api.sendChatMessage(text);
       
+      // CHECK FOR ACTION TRIGGERS
+      if (response.action === 'start_quote_flow') {
+           setQuoteFlow({ ...quoteFlow, active: true, step: 'NAME' });
+           // The text from response will trigger the start of the flow visually
+      }
+
       const botResponse: Message = {
         id: Date.now() + 1,
         text: response.text,
@@ -380,15 +503,15 @@ const ChatWidget: React.FC = () => {
           </div>
 
           {/* Quick Actions (Expanded List) */}
-          {messages.length < 5 && (
+          {!quoteFlow.active && messages.length < 5 && (
              <div className="bg-slate-50 px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
                 {QUICK_TOPICS.map((topic) => (
                    <button 
                      key={topic}
-                     onClick={() => handleSendMessage(topic === "Call Me" ? "Call Me" : `Tell me about ${topic}`)} 
+                     onClick={() => handleSendMessage(topic === "Call Me" ? "Call Me" : (topic === "Get Quote" ? "Generate Quote" : `Tell me about ${topic}`))} 
                      className="flex-shrink-0 text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full hover:bg-primary-50 transition shadow-sm whitespace-nowrap"
                    >
-                     {topic === "Call Me" ? "📞 Call Me" : topic}
+                     {topic === "Call Me" ? "📞 Call Me" : (topic === "Get Quote" ? "📝 Get Quote" : topic)}
                    </button>
                 ))}
              </div>
@@ -398,21 +521,23 @@ const ChatWidget: React.FC = () => {
           <div className="bg-white p-3 border-t border-gray-100 flex flex-col gap-2">
             
             {/* Service Selection Dropdown */}
-            <div className="relative">
-              <select 
-                className="w-full text-xs bg-slate-50 border border-gray-200 text-slate-600 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer appearance-none"
-                onChange={handleServiceSelect}
-                value={selectedService} // Controlled value
-              >
-                <option value="" disabled>Select a topic to inquire...</option>
-                {SERVICES.map((service) => (
-                  <option key={service.id} value={service.title}>
-                    {service.title}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-            </div>
+            {!quoteFlow.active && (
+              <div className="relative">
+                <select 
+                  className="w-full text-xs bg-slate-50 border border-gray-200 text-slate-600 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer appearance-none"
+                  onChange={handleServiceSelect}
+                  value={selectedService} // Controlled value
+                >
+                  <option value="" disabled>Select a topic to inquire...</option>
+                  {SERVICES.map((service) => (
+                    <option key={service.id} value={service.title}>
+                      {service.title}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+              </div>
+            )}
 
             <div className="flex items-center space-x-2">
               <input 
@@ -420,7 +545,7 @@ const ChatWidget: React.FC = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder="Ask a question..." 
+                placeholder={quoteFlow.active ? "Type your answer..." : "Ask a question..."} 
                 className="flex-grow bg-slate-100 text-slate-900 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all placeholder:text-slate-400"
               />
               
