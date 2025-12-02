@@ -77,17 +77,17 @@ const Booking: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div>
                      <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                     <input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors" placeholder="Your Name" />
+                     <input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors bg-white text-slate-900" placeholder="Your Name" />
                    </div>
                    <div>
                      <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                     <input type="tel" name="phone" required value={formData.phone} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors" placeholder="050..." />
+                     <input type="tel" name="phone" required value={formData.phone} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors bg-white text-slate-900" placeholder="050..." />
                    </div>
                 </div>
 
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-                   <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors" placeholder="you@example.com" />
+                   <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors bg-white text-slate-900" placeholder="you@example.com" />
                 </div>
 
                 <div>
@@ -98,7 +98,7 @@ const Booking: React.FC = () => {
                       required 
                       value={formData.serviceType} 
                       onChange={handleChange} 
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-700 appearance-none hover:border-primary-400 transition-colors cursor-pointer"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900 appearance-none hover:border-primary-400 transition-colors cursor-pointer"
                     >
                       <option value="">Select Service...</option>
                       {SERVICES.map(s => <option key={s.id} value={s.title}>{s.title}</option>)}
@@ -112,13 +112,13 @@ const Booking: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Preferred Date</label>
                     <div className="relative">
-                      <input type="date" name="date" required value={formData.date} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors" />
+                      <input type="date" name="date" required value={formData.date} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors bg-white text-slate-900" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Preferred Time</label>
                     <div className="relative">
-                       <input type="time" name="time" required value={formData.time} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors" />
+                       <input type="time" name="time" required value={formData.time} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none hover:border-primary-400 transition-colors bg-white text-slate-900" />
                     </div>
                   </div>
                 </div>

@@ -125,7 +125,7 @@ const Store: React.FC = () => {
                   placeholder="Search devices..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 w-full md:w-64 focus:ring-2 focus:ring-primary-500 outline-none"
+                  className="pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 w-full md:w-64 focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900"
                 />
               </div>
               

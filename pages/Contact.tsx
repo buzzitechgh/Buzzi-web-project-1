@@ -127,7 +127,7 @@ const Contact: React.FC = () => {
                       required
                       value={formData.name}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -139,7 +139,7 @@ const Contact: React.FC = () => {
                         required
                         value={formData.email}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
                       />
                     </div>
                     <div>
@@ -150,7 +150,7 @@ const Contact: React.FC = () => {
                         required
                         value={formData.phone}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
                       />
                     </div>
                   </div>
@@ -161,7 +161,7 @@ const Contact: React.FC = () => {
                         name="service"
                         value={formData.service}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition bg-white appearance-none hover:border-primary-400 cursor-pointer"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition bg-white text-slate-900 appearance-none hover:border-primary-400 cursor-pointer"
                       >
                         <option value="">Select a Service...</option>
                         {SERVICES.map(s => <option key={s.id} value={s.title}>{s.title}</option>)}
@@ -178,7 +178,7 @@ const Contact: React.FC = () => {
                       rows={4}
                       value={formData.message}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
                     ></textarea>
                   </div>
                   

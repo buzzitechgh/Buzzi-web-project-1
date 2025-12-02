@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
-import { Trash2, CreditCard, Smartphone, CheckCircle, ShieldCheck, ArrowLeft, Lock, Truck, MapPin, Banknote, Map, RefreshCw } from 'lucide-react';
+import { Trash2, CreditCard, Smartphone, CheckCircle, ShieldCheck, ArrowLeft, Lock, Truck, MapPin, Banknote, Map, RefreshCw, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/Button';
 import { api } from '../services/api';
@@ -52,33 +52,56 @@ const Checkout: React.FC = () => {
 
     setGeoLoading(true);
 
-    const successCallback = (position: GeolocationPosition) => {
+    const successCallback = async (position: GeolocationPosition) => {
       const { latitude, longitude } = position.coords;
       const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-      setCustomer(prev => ({
-        ...prev,
-        gpsCoordinates: coords,
-        address: prev.address ? `${prev.address} \n(GPS: ${coords})` : `GPS: ${coords}`
-      }));
+      
+      let detectedAddress = '';
+
+      // Attempt to reverse geocode the coordinates to get a readable address
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        if (response.ok) {
+           const data = await response.json();
+           if (data.display_name) {
+             detectedAddress = data.display_name;
+           }
+        }
+      } catch (error) {
+        console.warn("Could not reverse geocode address", error);
+      }
+
+      setCustomer(prev => {
+        const addressText = detectedAddress 
+           ? `${detectedAddress}\n(GPS: ${coords})` 
+           : `GPS: ${coords}`;
+
+        return {
+          ...prev,
+          gpsCoordinates: coords,
+          address: addressText
+        };
+      });
       setGeoLoading(false);
     };
 
-    const errorCallback = (error: GeolocationPositionError) => {
-      console.error("Geolocation Error:", error);
+    const errorCallback = (error: any) => {
+      console.error("Geolocation Error Details:", error);
       
       let errorMessage = "Unable to retrieve your location.";
-      switch(error.code) {
-        case 1: // PERMISSION_DENIED
+      
+      // Safe check for error code and message
+      const code = error?.code;
+      const message = error?.message || "Unknown error";
+
+      if (code === 1) { // PERMISSION_DENIED
           errorMessage = "Location permission denied. Please enable location access in your browser settings.";
-          break;
-        case 2: // POSITION_UNAVAILABLE
+      } else if (code === 2) { // POSITION_UNAVAILABLE
           errorMessage = "Location information is unavailable. Please check your GPS settings or enter address manually.";
-          break;
-        case 3: // TIMEOUT
+      } else if (code === 3) { // TIMEOUT
           errorMessage = "The request to get your location timed out.";
-          break;
-        default:
-          errorMessage = `Location error: ${error.message}`;
+      } else {
+          errorMessage = `Location error: ${message}`;
       }
       
       alert(errorMessage);
@@ -212,7 +235,7 @@ const Checkout: React.FC = () => {
                             min="1" 
                             value={item.quantity}
                             onChange={(e) => updateQuantity(item.id, parseInt(e.target.value))}
-                            className="w-16 px-2 py-1 border rounded text-center text-sm"
+                            className="w-16 px-2 py-1 border rounded text-center text-sm bg-white text-slate-900"
                           />
                           <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600">
                             <Trash2 size={18} />
@@ -246,38 +269,63 @@ const Checkout: React.FC = () => {
               {step === 'shipping' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
                   
-                  {/* Delivery Mode Toggle */}
-                  <div className="flex gap-4">
-                     <div 
-                       onClick={() => setDeliveryMode('delivery')}
-                       className={`flex-1 p-4 border rounded-xl cursor-pointer flex items-center justify-center flex-col gap-2 transition-all ${deliveryMode === 'delivery' ? 'bg-blue-50 border-primary-500 text-primary-700 font-bold' : 'hover:bg-gray-50 border-gray-200'}`}
+                  {/* Delivery Mode Toggle (Radio Inputs) */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                     <label 
+                       className={`flex-1 relative p-4 border rounded-xl cursor-pointer flex items-center gap-4 transition-all ${deliveryMode === 'delivery' ? 'bg-blue-50 border-primary-500 ring-1 ring-primary-500' : 'hover:bg-gray-50 border-gray-200'}`}
                      >
-                        <Truck size={24} />
-                        Door Delivery
-                     </div>
-                     <div 
-                       onClick={() => setDeliveryMode('pickup')}
-                       className={`flex-1 p-4 border rounded-xl cursor-pointer flex items-center justify-center flex-col gap-2 transition-all ${deliveryMode === 'pickup' ? 'bg-blue-50 border-primary-500 text-primary-700 font-bold' : 'hover:bg-gray-50 border-gray-200'}`}
+                        <input 
+                          type="radio" 
+                          name="deliveryMode" 
+                          value="delivery"
+                          checked={deliveryMode === 'delivery'}
+                          onChange={() => setDeliveryMode('delivery')}
+                          className="w-5 h-5 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        />
+                        <div>
+                           <div className="font-bold text-slate-900 flex items-center gap-2">
+                              <Truck size={20} className={deliveryMode === 'delivery' ? 'text-primary-600' : 'text-slate-400'} /> 
+                              Door Delivery
+                           </div>
+                           <p className="text-xs text-slate-500 mt-0.5">We deliver to your location</p>
+                        </div>
+                     </label>
+
+                     <label 
+                       className={`flex-1 relative p-4 border rounded-xl cursor-pointer flex items-center gap-4 transition-all ${deliveryMode === 'pickup' ? 'bg-blue-50 border-primary-500 ring-1 ring-primary-500' : 'hover:bg-gray-50 border-gray-200'}`}
                      >
-                        <MapPin size={24} />
-                        Store Pickup
-                     </div>
+                        <input 
+                          type="radio" 
+                          name="deliveryMode" 
+                          value="pickup"
+                          checked={deliveryMode === 'pickup'}
+                          onChange={() => setDeliveryMode('pickup')}
+                          className="w-5 h-5 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        />
+                        <div>
+                           <div className="font-bold text-slate-900 flex items-center gap-2">
+                              <MapPin size={20} className={deliveryMode === 'pickup' ? 'text-primary-600' : 'text-slate-400'} /> 
+                              Store Pickup
+                           </div>
+                           <p className="text-xs text-slate-500 mt-0.5">Collect from our office</p>
+                        </div>
+                     </label>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                      <input type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" 
+                      <input type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
                         value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder="John Doe" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                      <input type="email" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" 
+                      <input type="email" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
                         value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} placeholder="john@example.com" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                      <input type="tel" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" 
+                      <input type="tel" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
                         value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} placeholder="050 000 0000" />
                     </div>
 
@@ -286,7 +334,7 @@ const Checkout: React.FC = () => {
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Region</label>
                           <select 
-                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900"
                             value={customer.region}
                             onChange={(e) => setCustomer({...customer, region: e.target.value})}
                           >
@@ -298,17 +346,27 @@ const Checkout: React.FC = () => {
                         <div className="md:col-span-2">
                           <div className="flex justify-between items-center mb-1">
                              <label className="block text-sm font-medium text-slate-700">Delivery Address / GPS</label>
-                             <button 
-                               onClick={handleUseLocation}
-                               className="text-xs flex items-center gap-1 text-primary-600 hover:text-primary-800 font-semibold"
-                             >
-                               {geoLoading ? 'Locating...' : <><Map size={12} /> Use Current Location</>}
-                             </button>
+                             <div className="flex gap-2">
+                               <a 
+                                 href="https://www.ghanapostgps.com/map/" 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold"
+                               >
+                                 <ExternalLink size={12} /> GhanaPostGPS
+                               </a>
+                               <button 
+                                 onClick={handleUseLocation}
+                                 className="text-xs flex items-center gap-1 text-primary-600 hover:text-primary-800 font-semibold"
+                               >
+                                 {geoLoading ? 'Locating...' : <><Map size={12} /> Use Current Location</>}
+                               </button>
+                             </div>
                           </div>
                           <div className="relative">
                             <textarea 
                               rows={3} 
-                              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" 
+                              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
                               value={customer.address} 
                               onChange={e => setCustomer({...customer, address: e.target.value})}
                               placeholder="House Number, Street Name, or Digital Address (GPS)"
@@ -319,7 +377,7 @@ const Checkout: React.FC = () => {
                                </div>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-1">We use your GPS to find your exact location for delivery.</p>
+                          <p className="text-xs text-slate-500 mt-1">We use your GPS to find your exact location and autofill address details.</p>
                         </div>
                       </>
                     )}
