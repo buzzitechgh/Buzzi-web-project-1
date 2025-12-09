@@ -60,6 +60,7 @@ export interface Product {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number; // Added for discount display (strikethrough)
   category: string;
   image: string;
   description: string;

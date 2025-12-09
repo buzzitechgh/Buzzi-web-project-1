@@ -22,7 +22,7 @@ import { ServiceItem, Testimonial } from './types';
 
 export const COMPANY_INFO = {
   name: "Buzzitech IT Solutions & Services",
-  phone: "050 748 0623 / 054 470 9829",
+  phone: "050 748 0623",
   whatsapp: "233507480623", 
   email: "buzzitechgh@gmail.com",
   address: "Accra, Ghana"

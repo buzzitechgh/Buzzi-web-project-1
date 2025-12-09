@@ -172,66 +172,92 @@ const Store: React.FC = () => {
       <section className="py-12 container mx-auto px-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {filteredProducts.length > 0 ? (
-            filteredProducts.map((product) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 group flex flex-col"
-              >
-                <div className="relative h-64 overflow-hidden bg-gray-100 p-4 flex items-center justify-center">
-                  <img 
-                    src={product.image} 
-                    alt={product.name} 
-                    className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500 mix-blend-multiply" 
-                  />
-                  {product.stock < 10 && (
-                    <span className="absolute top-2 right-2 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded border border-orange-200">
-                      Only {product.stock} Left
-                    </span>
-                  )}
-                  {product.category === 'Starlink' && (
-                    <span className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded">
-                      High Speed
-                    </span>
-                  )}
-                </div>
+            filteredProducts.map((product) => {
+              // Calculate discount percentage if original price exists
+              const discountPercentage = product.originalPrice 
+                ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) 
+                : 0;
 
-                <div className="p-5 flex-grow flex flex-col">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-semibold text-primary-600 uppercase tracking-wide bg-primary-50 px-2 py-0.5 rounded">
-                      {product.category}
-                    </span>
+              return (
+                <motion.div
+                  key={product.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 group flex flex-col"
+                >
+                  <div className="relative h-64 overflow-hidden bg-gray-100 p-4 flex items-center justify-center">
+                    <img 
+                      src={product.image} 
+                      alt={product.name} 
+                      className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500 mix-blend-multiply" 
+                    />
+                    
+                    {/* Discount Badge */}
+                    {discountPercentage > 0 && (
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10">
+                        -{discountPercentage}%
+                      </span>
+                    )}
+
+                    {/* Stock Badge */}
+                    {product.stock < 10 && (
+                      <span className="absolute top-2 right-2 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded border border-orange-200 z-10">
+                        Only {product.stock} Left
+                      </span>
+                    )}
+                    
+                    {/* Feature Badge (Moved to bottom left to avoid overlap with discount) */}
+                    {product.category === 'Starlink' && (
+                      <span className="absolute bottom-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10">
+                        High Speed
+                      </span>
+                    )}
                   </div>
-                  
-                  <h3 className="font-bold text-slate-900 text-lg mb-2 leading-tight group-hover:text-primary-600 transition-colors">
-                    {product.name}
-                  </h3>
-                  <p className="text-slate-500 text-sm line-clamp-2 mb-4 flex-grow">
-                    {product.description}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
-                    <div className="flex flex-col">
-                        <span className="text-xs text-slate-400">Price</span>
-                        <span className="text-xl font-bold text-slate-900">
-                          GHS {product.price.toLocaleString()}
-                        </span>
+
+                  <div className="p-5 flex-grow flex flex-col">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-semibold text-primary-600 uppercase tracking-wide bg-primary-50 px-2 py-0.5 rounded">
+                        {product.category}
+                      </span>
                     </div>
                     
-                    {/* Add to Cart Button with Press Animation */}
-                    <motion.button
-                      whileTap={{ scale: 0.8 }}
-                      onClick={(e) => handleAddToCart(e, product)}
-                      className="bg-slate-900 hover:bg-primary-600 text-white p-3 rounded-xl transition-colors shadow-lg active:shadow-inner flex items-center justify-center relative overflow-hidden"
-                      title="Add to Cart"
-                    >
-                      <Plus size={20} />
-                    </motion.button>
+                    <h3 className="font-bold text-slate-900 text-lg mb-2 leading-tight group-hover:text-primary-600 transition-colors">
+                      {product.name}
+                    </h3>
+                    <p className="text-slate-500 text-sm line-clamp-2 mb-4 flex-grow">
+                      {product.description}
+                    </p>
+                    
+                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                      <div className="flex flex-col">
+                          <span className="text-xs text-slate-400">Price</span>
+                          <div className="flex items-baseline flex-wrap gap-x-2">
+                            <span className="text-xl font-bold text-slate-900">
+                              GHS {product.price.toLocaleString()}
+                            </span>
+                            {/* Strikethrough Original Price */}
+                            {product.originalPrice && product.originalPrice > product.price && (
+                              <span className="text-xs text-slate-400 line-through">
+                                GHS {product.originalPrice.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                      </div>
+                      
+                      {/* Add to Cart Button with Press Animation */}
+                      <motion.button
+                        whileTap={{ scale: 0.8 }}
+                        onClick={(e) => handleAddToCart(e, product)}
+                        className="bg-slate-900 hover:bg-primary-600 text-white p-3 rounded-xl transition-colors shadow-lg active:shadow-inner flex items-center justify-center relative overflow-hidden"
+                        title="Add to Cart"
+                      >
+                        <Plus size={20} />
+                      </motion.button>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))
+                </motion.div>
+              );
+            })
           ) : (
             <div className="col-span-full text-center py-20 text-slate-400">
               <ShoppingCart size={48} className="mx-auto mb-4 opacity-20" />
