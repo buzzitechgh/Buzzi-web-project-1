@@ -86,13 +86,14 @@ const Checkout: React.FC = () => {
     };
 
     const errorCallback = (error: any) => {
-      console.error("Geolocation Error Details:", error);
+      // Improved logging: Ensure we print the message or stringify the object if needed
+      console.error("Geolocation Error:", error?.message || JSON.stringify(error));
       
       let errorMessage = "Unable to retrieve your location.";
       
       // Safe check for error code and message
       const code = error?.code;
-      const message = error?.message || "Unknown error";
+      const message = error?.message; // Access message directly
 
       if (code === 1) { // PERMISSION_DENIED
           errorMessage = "Location permission denied. Please enable location access in your browser settings.";
@@ -100,8 +101,10 @@ const Checkout: React.FC = () => {
           errorMessage = "Location information is unavailable. Please check your GPS settings or enter address manually.";
       } else if (code === 3) { // TIMEOUT
           errorMessage = "The request to get your location timed out.";
-      } else {
+      } else if (message) {
           errorMessage = `Location error: ${message}`;
+      } else {
+          errorMessage = "An unknown error occurred while retrieving location.";
       }
       
       alert(errorMessage);

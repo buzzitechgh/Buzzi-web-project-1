@@ -5,126 +5,109 @@ import { N8N_CHAT_WEBHOOK_URL } from '../constants';
 // Specific Webhook URL provided for the Quote/Invoice logic
 const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/quote-manual-final";
 
-// Points to the local Node.js server (from server/server.js) - kept for other forms if needed
-const BACKEND_URL = 'http://localhost:5000/api';
-const CONTACT_EMAIL = "buzzitechgh@gmail.com";
+// Backend Configuration
+// In production, VITE_API_URL will be set. In development, it falls back to localhost.
+// Safely access env using optional chaining to prevent crash if env is undefined
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
 
-// Utility to simulate network delay for fallback
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper function to try sending to backend, falling back to simulation if offline
-const postToBackend = async (endpoint: string, data: any) => {
+// Utility for making API requests
+const request = async (endpoint: string, method: string, data: any) => {
   try {
-    const response = await fetch(`${BACKEND_URL}/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+    const response = await fetch(`${API_URL}/${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
     });
     
     if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
+        throw new Error(`Server error: ${response.status}`);
     }
-    
     return await response.json();
   } catch (error) {
-    console.warn(`[Backend Offline] Could not connect to ${BACKEND_URL}. Using simulation mode.`, error);
-    return null; // Return null to indicate failure/fallback
+    console.error(`API Call Failed [${endpoint}]:`, error);
+    // Return null to allow fallback handling if needed
+    return { success: false, message: "Network Error" }; 
   }
 };
 
 export const api = {
   submitContactForm: async (data: ContactFormData): Promise<{ success: boolean; message: string }> => {
-    console.log("Submitting Contact Form...", data);
-    const result = await postToBackend('contact', data);
-    if (result && result.success) return result;
-    await delay(1500);
-    return { success: true, message: "Message sent successfully!" };
+    return await request('forms/contact', 'POST', data);
   },
 
   bookAppointment: async (data: AppointmentFormData): Promise<{ success: boolean; message: string }> => {
-    console.log("Submitting Booking...", data);
-    const result = await postToBackend('booking', data);
-    if (result && result.success) return result;
-    await delay(1500);
-    return { success: true, message: "Appointment request submitted successfully!" };
+    return await request('forms/booking', 'POST', data);
   },
 
   // E-COMMERCE PAYMENT PROCESSING
   processPayment: async (order: Order): Promise<{ success: boolean; transactionId: string }> => {
-    console.log(`Processing ${order.paymentMethod} Payment for GHS ${order.total}`, order);
-    await delay(3000); // Simulate processing time
+    const result = await request('orders', 'POST', order);
     
-    // Simulate webhooks/backend recording
-    try {
-        await fetch(N8N_QUOTE_WEBHOOK, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...order,
-                type: 'STORE_ORDER',
-                paymentStatus: 'SUCCESS'
-            })
-        });
-    } catch (e) {
-        console.warn("Could not log order to N8N");
+    // Also trigger N8N webhook for workflow automation if order successful
+    if (result.success) {
+        try {
+            await fetch(N8N_QUOTE_WEBHOOK, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...order,
+                    type: 'STORE_ORDER',
+                    paymentStatus: 'SUCCESS'
+                })
+            });
+        } catch (e) {
+            console.warn("Could not log order to N8N");
+        }
     }
-
-    return { 
-        success: true, 
-        transactionId: `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}` 
-    };
+    return result;
   },
 
-  // Updated Quote Request to use the specific N8N Webhook
+  // Quote Request
   requestQuotation: async (data: QuoteFormData): Promise<{ success: boolean; message: string; data?: any }> => {
-    console.log("Submitting Quote to N8N...", data);
-    
-    const payload = {
-      customer_name: data.name,
-      customer_email: data.email,
-      customer_phone: data.phone,
-      selected_services: data.items.map(item => ({
-        name: item.name,
-        category: item.category,
-        description: item.description || "",
-        unit_price: item.price,
-        quantity: item.quantity,
-        subtotal: item.price * item.quantity
-      })),
-      grand_total: data.grandTotal,
-      notes: data.description,
-      quote_generated: true,
-      invoice_requested: true
-    };
+    // 1. Send to Backend for Record Keeping
+    request('forms/quote', 'POST', data);
 
+    // 2. Send to N8N for PDF/Email Workflow
     try {
       const response = await fetch(N8N_QUOTE_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+             customer_name: data.name,
+             customer_email: data.email,
+             customer_phone: data.phone,
+             selected_services: data.items.map(item => ({
+                name: item.name,
+                category: item.category,
+                description: item.description || "",
+                unit_price: item.price,
+                quantity: item.quantity,
+                subtotal: item.price * item.quantity
+             })),
+             grand_total: data.grandTotal,
+             notes: data.description,
+             quote_generated: true,
+             invoice_requested: true
+        })
       });
 
-      if (!response.ok) {
-        throw new Error(`Webhook Error: ${response.status} ${response.statusText}`);
-      }
-
+      if (!response.ok) throw new Error("Webhook failed");
       const resultData = await response.json();
+      
       return { 
         success: true, 
         message: "Quote generated and sent to processing.", 
         data: resultData 
       };
     } catch (error) {
-      // Log as warning instead of error since we have a fallback
       console.warn("N8N Webhook unreachable, switching to offline generation.", error);
-      // Fallback only if webhook fails totally, to ensure user still gets PDF
       return { success: true, message: "Local quote generated (Offline Mode)." }; 
     }
   },
 
-  // New: Handle Customer Feedback
   submitFeedback: async (feedbackData: { name: string, email: string, message: string }): Promise<void> => {
-    console.log("Sending Feedback to N8N...");
     try {
       await fetch(N8N_QUOTE_WEBHOOK, {
         method: 'POST',
@@ -141,29 +124,27 @@ export const api = {
     }
   },
 
-  // Intelligent Chatbot Logic utilizing Knowledge Base and N8N Sync
+  // Intelligent Chatbot Logic (Remains mostly client-side hybrid)
   sendChatMessage: async (message: string): Promise<{ text: string, action?: string }> => {
     const lowerMsg = message.toLowerCase().trim();
 
     // 1. Phone / Action Detection (High Priority)
     if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human') || lowerMsg.includes('agent')) {
-       await delay(500);
        return { 
-           text: "I can have our AI Voice Assistant call you immediately to discuss your needs. Please enter your phone number.",
+           text: "I can have our AI Voice Assistant call you immediately. Please enter your phone number.",
            action: 'request_phone'
        };
     }
 
     const phoneMatch = message.match(/(\+233|0)\d{9}/);
     if (phoneMatch) {
-       await delay(800);
        return { 
-           text: `Thanks! I'm initiating a priority call to ${phoneMatch[0]} right now using our AI Voice Agent. Please keep your line open, you will receive a call within 30 seconds.`,
+           text: `Thanks! I'm initiating a priority call to ${phoneMatch[0]} right now using our AI Voice Agent.`,
            action: 'trigger_call'
        };
     }
 
-    // 2. Check Local Knowledge Base (Medium Priority - Accurate Company Info & Troubleshooting)
+    // 2. Check Local Knowledge Base
     let bestMatch = null;
     let highestScore = 0;
 
@@ -171,11 +152,8 @@ export const api = {
       let score = 0;
       entry.keywords.forEach(keyword => {
         if (lowerMsg.includes(keyword.toLowerCase())) {
-          // Weighted scoring: Longer keywords usually mean more specific matches
           score += 1 + (keyword.length * 0.1);
-          
-          // Boost score significantly if it's a direct topic match (e.g. from buttons)
-          if (lowerMsg === keyword.toLowerCase() || lowerMsg === `tell me about ${keyword.toLowerCase()}` || lowerMsg.includes(`about ${keyword.toLowerCase()}`)) {
+          if (lowerMsg === keyword.toLowerCase() || lowerMsg.includes(`about ${keyword.toLowerCase()}`)) {
              score += 10;
           }
         }
@@ -187,13 +165,11 @@ export const api = {
       }
     });
 
-    // If we have a confident match in local KB, use it.
     if (bestMatch && highestScore >= 1.0) {
-      await delay(600); // Simulate "typing"
-      return { text: bestMatch.answer, action: bestMatch.action }; // Include action trigger
+      return { text: bestMatch.answer, action: bestMatch.action }; 
     }
 
-    // 3. Fallback to N8N AI Agent (Low Priority - General Queries)
+    // 3. Fallback to N8N AI Agent
     if (N8N_CHAT_WEBHOOK_URL && !N8N_CHAT_WEBHOOK_URL.includes('your-n8n-instance')) {
         try {
             const response = await fetch(N8N_CHAT_WEBHOOK_URL, {
@@ -215,11 +191,10 @@ export const api = {
                 }
             }
         } catch (error) {
-            console.warn("N8N Agent unreachable or offline, switching to fallback.", error);
+            console.warn("N8N Agent unreachable or offline.", error);
         }
     }
 
-    await delay(500);
     return { text: FALLBACK_ANSWER };
   }
 };
