@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Buzzitech IT Solutions & Services</title>
+    <!-- Keeping Tailwind CDN for styling simplicity as per original design -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
@@ -15,8 +16,8 @@
             },
             colors: {
               brand: {
-                yellow: '#FFB800', // The yellow/orange from "OUR SERVICE"
-                dark: '#0B1120',   // Deep tech background
+                yellow: '#FFB800', 
+                dark: '#0B1120',   
               },
               primary: {
                 50: '#eff6ff',
@@ -24,10 +25,10 @@
                 200: '#bfdbfe',
                 300: '#93c5fd',
                 400: '#60a5fa',
-                500: '#3b82f6', // Bright Blue
+                500: '#3b82f6', 
                 600: '#2563eb',
                 700: '#1d4ed8',
-                800: '#002855', // Deep Navy Blue from image
+                800: '#002855', 
                 900: '#001b3d',
                 950: '#001229',
               }
@@ -63,19 +64,23 @@
   <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
-    "jspdf": "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    "vite": "https://aistudiocdn.com/vite@^7.2.7",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.87.1",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.25",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.10.1",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4"
   }
 }
 </script>
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased selection:bg-brand-yellow selection:text-brand-dark">
     <div id="root"></div>
+    <!-- Vite Entry Point -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
