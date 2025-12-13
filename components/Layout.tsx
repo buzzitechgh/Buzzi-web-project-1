@@ -17,6 +17,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isBumping, setIsBumping] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
 
+  // Define pages that have a light background at the top, requiring dark header text immediately
+  const isLightPage = ['/store', '/checkout'].includes(location.pathname);
+
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
@@ -58,6 +61,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { name: 'Book Appointment', path: '/booking' },
   ];
 
+  // Determine text color based on scroll state or page type
+  const headerTextColorClass = isScrolled || isLightPage 
+    ? 'text-slate-600 hover:text-primary-600' 
+    : 'text-gray-100 hover:text-white';
+
+  const iconColorClass = isScrolled || isLightPage 
+    ? 'text-slate-800' 
+    : 'text-white';
+
   return (
     <div className="flex flex-col min-h-screen relative">
       {/* Global Background Effects */}
@@ -89,8 +101,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div className="flex justify-between items-center">
             {/* Logo */}
             <Link to="/" className="flex items-center group">
-               {/* Pass lightMode true if not scrolled (transparent background on dark hero) */}
-               <Logo lightMode={!isScrolled} className="h-12" />
+               {/* Pass lightMode true if NOT scrolled AND NOT a light page */}
+               <Logo lightMode={!isScrolled && !isLightPage} className="h-12" />
             </Link>
 
             {/* Desktop Nav */}
@@ -102,9 +114,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   className={`text-sm font-medium transition-colors ${
                     location.pathname === link.path
                       ? 'text-primary-600'
-                      : isScrolled 
-                        ? 'text-slate-600 hover:text-primary-600' 
-                        : 'text-gray-100 hover:text-white'
+                      : headerTextColorClass
                   }`}
                 >
                   {link.name}
@@ -115,8 +125,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <Link 
                 to="/checkout" 
                 className={`relative p-2 rounded-full transition-colors ${
-                  isScrolled ? 'text-slate-800 hover:bg-slate-100' : 'text-white hover:bg-white/10'
-                } ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
+                  isScrolled || isLightPage ? 'hover:bg-slate-100' : 'hover:bg-white/10'
+                } ${iconColorClass} ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
               >
                 <ShoppingCart size={20} />
                 {totalItems > 0 && (
@@ -129,7 +139,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <Link
                 to="/quote"
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isScrolled 
+                  isScrolled || isLightPage
                     ? 'bg-primary-600 text-white hover:bg-primary-700' 
                     : 'bg-white text-primary-600 hover:bg-gray-100'
                 }`}
@@ -142,9 +152,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="flex items-center gap-4 md:hidden">
               <Link 
                 to="/checkout" 
-                className={`relative p-2 rounded-full ${
-                  isScrolled ? 'text-slate-800' : 'text-white'
-                } ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
+                className={`relative p-2 rounded-full ${iconColorClass} ${isBumping ? 'animate-cart-bump text-brand-yellow' : ''} ${isShaking ? 'animate-cart-shake' : ''}`}
               >
                 <ShoppingCart size={22} />
                 {totalItems > 0 && (
@@ -158,7 +166,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 className="p-2 rounded-md text-slate-600 hover:bg-slate-100"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
-                {isMenuOpen ? <X /> : <Menu className={isScrolled ? "text-slate-900" : "text-slate-900 md:text-white"} />}
+                {isMenuOpen ? <X /> : <Menu className={iconColorClass} />}
               </button>
             </div>
           </div>

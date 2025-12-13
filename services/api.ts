@@ -13,7 +13,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const N8N_QUOTE_WEBHOOK = "https://vmi2920096.contaboserver.net/webhook-test/quote-manual-final";
 
 // Backend Configuration
-// In production, VITE_API_URL will be set. In development, it falls back to localhost.
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
 
 // Utility for making API requests
@@ -32,7 +31,6 @@ const request = async (endpoint: string, method: string, data: any) => {
     }
     return await response.json();
   } catch (error) {
-    // Log as warning instead of error to reduce console noise in serverless/offline mode
     console.warn(`Backend API (${endpoint}) unreachable - running in offline/headless mode.`);
     return { success: false, message: "Network Error" }; 
   }
@@ -51,6 +49,17 @@ export const api = {
   processPayment: async (order: Order): Promise<{ success: boolean; transactionId: string }> => {
     // 1. Send Order to Supabase (Primary Storage)
     try {
+      // Construct a descriptive product string including delivery/install info
+      let productSummary = order.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
+      
+      // Append Delivery Info
+      productSummary += ` | Delivery: ${order.deliveryMode === 'delivery' ? 'Door (GHS ' + order.deliveryCost + ')' : 'Pickup'}`;
+      
+      // Append Installation Info
+      if (order.installationType !== 'none') {
+         productSummary += ` | Install: ${order.installationType === 'estimate' ? 'On-Site Estimate' : 'Standard (GHS ' + order.installationCost + ')'}`;
+      }
+
       const { error } = await supabase
         .from('orders')
         .insert({
@@ -61,7 +70,7 @@ export const api = {
           delivery_address: order.customer.address, // Contains GPS if used
           region: order.customer.region,
           order_type: order.deliveryMode,
-          product_names: order.items.map(item => `${item.quantity}x ${item.name}`).join(', '),
+          product_names: productSummary, // Modified to include extra details
           total_amount: order.total,
           payment_method: order.paymentMethod,
           status: order.status,
@@ -89,11 +98,9 @@ export const api = {
             })
         });
     } catch (e) {
-        // Suppress visual errors for webhook failures (CORS/Offline)
         console.debug("N8N Webhook note: Could not log order to N8N (possibly offline or CORS)");
     }
 
-    // 3. Always return success to UI since we rely on Supabase (or offline mode)
     return { success: true, transactionId: order.id };
   },
 

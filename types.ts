@@ -85,7 +85,11 @@ export interface Order {
     gpsCoordinates?: string;
   };
   deliveryMode: 'delivery' | 'pickup';
+  deliveryCost: number;
   paymentMethod: 'paystack' | 'momo' | 'cod';
   status: 'pending' | 'completed';
   date: Date;
+  // Installation logic
+  installationType: 'none' | 'standard' | 'estimate';
+  installationCost: number;
 }

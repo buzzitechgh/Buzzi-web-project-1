@@ -69,7 +69,7 @@ const Store: React.FC = () => {
   const targetY = 30; // Approx header height center
 
   return (
-    <div className="pt-20 bg-gray-50 min-h-screen relative overflow-x-hidden">
+    <div className="bg-gray-50 min-h-screen relative overflow-x-hidden">
       
       {/* Flying Items Animation Overlay */}
       <AnimatePresence>
@@ -109,7 +109,7 @@ const Store: React.FC = () => {
       </AnimatePresence>
 
       {/* Header / Hero */}
-      <section className="bg-white border-b border-gray-200 py-12">
+      <section className="bg-white border-b border-gray-200 pt-32 pb-12">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div>

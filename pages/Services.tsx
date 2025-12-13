@@ -5,9 +5,9 @@ import Button from '../components/Button';
 
 const Services: React.FC = () => {
   return (
-    <div className="pt-20">
+    <div>
       {/* Header */}
-      <section className="bg-slate-900 text-white py-20">
+      <section className="bg-slate-900 text-white pt-32 pb-20">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">Our Services</h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">

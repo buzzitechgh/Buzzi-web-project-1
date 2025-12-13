@@ -154,29 +154,14 @@ const LoadingScreen: React.FC = () => {
           transition={{ duration: 0.8, delay: 0.2 }}
           className="mb-6 bg-slate-900/50 backdrop-blur-sm p-6 rounded-3xl border border-white/5 shadow-2xl"
         >
-          <Logo className="h-20 scale-125" lightMode={true} />
-        </motion.div>
-
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6, duration: 1 }}
-            className="text-center"
-        >
-            <h1 className="text-3xl md:text-5xl font-bold text-white mb-2 tracking-tight">
-              Buzzitech
-            </h1>
-            <div className="h-0.5 w-24 bg-gradient-to-r from-transparent via-blue-500 to-transparent mx-auto mb-3"></div>
-            <p className="text-blue-300 tracking-[0.2em] text-sm uppercase font-semibold">
-              IT Solutions & Services
-            </p>
+          <Logo className="h-24 scale-125" lightMode={true} />
         </motion.div>
 
         <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1, duration: 0.5 }}
-            className="mt-12 flex items-center space-x-3"
+            className="mt-8 flex items-center space-x-3"
         >
              <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>

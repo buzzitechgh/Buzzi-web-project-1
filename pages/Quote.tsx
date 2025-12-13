@@ -180,10 +180,6 @@ const Quote: React.FC = () => {
                 <div><strong>Items:</strong> {cart.length}</div>
                 <div><strong>Status:</strong> <span className="text-green-600 font-semibold">Quote Generated & Invoice Requested</span></div>
              </div>
-             {/* Optional: Show raw server response if useful, or keep it clean */}
-             {/* <div className="text-xs text-slate-400 font-mono mt-2 p-2 bg-slate-100 rounded overflow-x-auto">
-                Server Response: {serverMessage}
-             </div> */}
            </div>
 
            {/* Feedback Section */}
@@ -234,8 +230,8 @@ const Quote: React.FC = () => {
   }
 
   return (
-    <div className="pt-20 bg-slate-50 min-h-screen">
-      <section className="bg-slate-900 text-white py-12">
+    <div className="bg-slate-50 min-h-screen">
+      <section className="bg-slate-900 text-white pt-32 pb-12">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">Create Your Quote</h1>
           <p className="text-slate-300">Select devices and services to generate an instant estimate.</p>
