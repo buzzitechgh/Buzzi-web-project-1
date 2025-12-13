@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart } from 'lucide-react';
+import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart, Lock } from 'lucide-react';
 import { COMPANY_INFO } from '../constants';
 import ChatWidget from './ChatWidget';
 import Logo from './Logo';
@@ -19,6 +19,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Define pages that have a light background at the top, requiring dark header text immediately
   const isLightPage = ['/store', '/checkout'].includes(location.pathname);
+  
+  // Check if we are on an admin route
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -69,6 +72,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const iconColorClass = isScrolled || isLightPage 
     ? 'text-slate-800' 
     : 'text-white';
+
+  // If Admin Route, render a simplified layout without the standard header/footer
+  if (isAdminRoute) {
+    return (
+      <div className="flex flex-col min-h-screen bg-slate-50">
+        <NetworkCursor />
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen relative">
@@ -266,8 +279,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </div>
           </div>
           
-          <div className="border-t border-slate-800 mt-12 pt-8 text-center text-sm">
+          <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
             <p>&copy; {new Date().getFullYear()} Buzzitech IT Solutions & Services. All rights reserved.</p>
+            <Link to="/admin" className="mt-4 md:mt-0 flex items-center gap-2 text-slate-500 hover:text-white transition-colors duration-200">
+              <Lock size={14} /> <span className="text-xs font-semibold uppercase tracking-wider">Admin Portal</span>
+            </Link>
           </div>
         </div>
       </footer>

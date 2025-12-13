@@ -11,6 +11,8 @@ import Booking from './pages/Booking';
 import Quote from './pages/Quote';
 import Store from './pages/Store';
 import Checkout from './pages/Checkout';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +41,11 @@ const App: React.FC = () => {
           <Route path="/quote" element={<Quote />} />
           <Route path="/store" element={<Store />} />
           <Route path="/checkout" element={<Checkout />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </Layout>
     </Router>
