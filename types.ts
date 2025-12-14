@@ -60,6 +60,7 @@ export interface Technician {
   id: string;
   name: string;
   email?: string; // Added for login
+  phone?: string; // Added for contact
   role: string;
   department?: string; // Added for professional details
   rating: number;

@@ -64,13 +64,13 @@ const notifyUser = async (recipient: string, type: 'email' | 'sms', message: str
 // Mock Data Stores for Demo
 let MOCK_TECHNICIANS: Technician[] = [
   { 
-    id: 't1', name: "Kwame Osei", email: 'kwame@buzzitech.com', role: "Network Engineer", department: "Infrastructure", rating: 4.8, feedback: "Very professional cabling work.", status: 'Active',
+    id: 't1', name: "Kwame Osei", email: 'kwame@buzzitech.com', phone: '0501112233', role: "Network Engineer", department: "Infrastructure", rating: 4.8, feedback: "Very professional cabling work.", status: 'Active',
     reviews: [{ customer: 'John Doe', rating: 5, comment: 'Excellent work!', date: '2023-11-20' }],
     jobsCompleted: 145
   },
-  { id: 't2', name: "John Mensah", email: 'john@buzzitech.com', role: "CCTV Specialist", department: "Security", rating: 4.5, feedback: "Clean installation, polite.", status: 'Busy', reviews: [], jobsCompleted: 89 },
-  { id: 't3', name: "Sarah Addo", email: 'sarah@buzzitech.com', role: "Software Support", department: "IT Support", rating: 5.0, feedback: "Solved the POS issue quickly.", status: 'Active', reviews: [], jobsCompleted: 112 },
-  { id: 't4', name: "Emmanuel K.", email: 'emmanuel@buzzitech.com', role: "Field Technician", department: "Field Ops", rating: 4.2, feedback: "Good work but arrived slightly late.", status: 'Active', reviews: [], jobsCompleted: 67 }
+  { id: 't2', name: "John Mensah", email: 'john@buzzitech.com', phone: '0244556677', role: "CCTV Specialist", department: "Security", rating: 4.5, feedback: "Clean installation, polite.", status: 'Busy', reviews: [], jobsCompleted: 89 },
+  { id: 't3', name: "Sarah Addo", email: 'sarah@buzzitech.com', phone: '0277889900', role: "Software Support", department: "IT Support", rating: 5.0, feedback: "Solved the POS issue quickly.", status: 'Active', reviews: [], jobsCompleted: 112 },
+  { id: 't4', name: "Emmanuel K.", email: 'emmanuel@buzzitech.com', phone: '0555666777', role: "Field Technician", department: "Field Ops", rating: 4.2, feedback: "Good work but arrived slightly late.", status: 'Active', reviews: [], jobsCompleted: 67 }
 ];
 
 let MOCK_ORDERS = [
@@ -627,6 +627,7 @@ export const api = {
         role: techData.role || 'General Staff',
         department: techData.department || 'General',
         email: techData.email || '',
+        phone: techData.phone || '',
         rating: techData.rating || 5,
         feedback: techData.feedback || 'No records yet.',
         status: 'Active',
@@ -639,6 +640,11 @@ export const api = {
 
   getAdminBookings: async (token: string) => {
       return MOCK_BOOKINGS;
+  },
+
+  deleteBooking: async (id: string, token: string) => {
+      MOCK_BOOKINGS = MOCK_BOOKINGS.filter(b => b.id !== id);
+      return { success: true };
   },
 
   createAdminBooking: async (data: any, token: string) => {
@@ -678,7 +684,7 @@ export const api = {
               const techMsg = `New Job Assigned: ${data.serviceType} for ${data.name}. Location: See details.`;
               await notifyUser(tech.email, 'email', techMsg);
               // Assume tech has phone
-              await notifyUser('050XXXXXXX', 'sms', techMsg);
+              await notifyUser(tech.phone || '050XXXXXXX', 'sms', techMsg);
           }
       }
 

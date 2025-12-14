@@ -99,6 +99,13 @@ const CustomerDashboard: React.FC = () => {
       }
   };
 
+  // Helper to safely format dates
+  const formatBookingDate = (dateString: string) => {
+      if (!dateString) return "Date Pending";
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) ? "Date Pending" : date.toDateString();
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">Loading Dashboard...</div>;
 
   return (
@@ -138,7 +145,9 @@ const CustomerDashboard: React.FC = () => {
                               <div key={booking.id} className="border border-blue-100 bg-blue-50 rounded-xl p-5 flex flex-col md:flex-row justify-between items-center gap-4">
                                   <div>
                                       <h4 className="font-bold text-slate-800">{booking.serviceType}</h4>
-                                      <p className="text-sm text-slate-600 mb-1">{new Date(booking.date).toDateString()} at {booking.time}</p>
+                                      <p className="text-sm text-slate-600 mb-1">
+                                          {formatBookingDate(booking.date)} at {booking.time || 'Time TBD'}
+                                      </p>
                                       <span className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full">{booking.status}</span>
                                   </div>
                                   

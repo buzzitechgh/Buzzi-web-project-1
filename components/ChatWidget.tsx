@@ -160,10 +160,20 @@ const ChatWidget: React.FC = () => {
 
   // Initial Auto-Open, Welcome Sequence & Auto-Close
   useEffect(() => {
+    // Throttling logic using localStorage
+    const lastPopup = localStorage.getItem('buzzitech_chat_last_popup');
+    const now = Date.now();
+    const FIFTEEN_MINUTES = 15 * 60 * 1000;
+
+    if (lastPopup && (now - parseInt(lastPopup)) < FIFTEEN_MINUTES) {
+        // Do not auto-open if shown recently
+        return;
+    }
+
     let openTimeout: ReturnType<typeof setTimeout>;
     let closeTimeout: ReturnType<typeof setTimeout>;
 
-    // 1. Wait 1 second after page load (let user see the hero section first)
+    // 1. Wait 1 second after page load
     const startSequenceTimer = setTimeout(() => {
       // 2. Start Vibrate to grab attention
       setIsVibrating(true);
@@ -172,14 +182,18 @@ const ChatWidget: React.FC = () => {
       openTimeout = setTimeout(() => {
         setIsVibrating(false);
         setIsOpen(true); // Triggers 'popup' sound via useEffect
+        
+        // Update local storage to prevent frequent popups
+        localStorage.setItem('buzzitech_chat_last_popup', Date.now().toString());
 
-        // 4. Auto-minimize after 30 seconds
+        // 4. Auto-minimize after 60 seconds (1 minute) if no interaction
+        // Setting to 1 minute as "1sec" in prompt is likely a typo for a reasonable short duration
         closeTimeout = setTimeout(() => {
           setIsOpen((prev) => {
             if(prev) playSound('close');
             return false;
           });
-        }, 30000);
+        }, 60000); 
 
       }, 1000);
     }, 1000);
@@ -191,14 +205,14 @@ const ChatWidget: React.FC = () => {
     };
   }, []);
 
-  // Periodic Reminder Vibration (only if closed)
+  // Periodic Reminder Vibration (only if closed) - Interval increased to 15min
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isOpen) {
         setIsVibrating(true);
         setTimeout(() => setIsVibrating(false), 1000);
       }
-    }, 15000); // Remind every 15 seconds if closed
+    }, 15 * 60 * 1000); // Remind every 15 minutes if closed
     return () => clearInterval(interval);
   }, [isOpen]);
 

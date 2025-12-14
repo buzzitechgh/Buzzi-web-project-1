@@ -5,7 +5,7 @@ import {
   Calendar, MessageSquare, FileText, TrendingUp, Users, DollarSign,
   Phone, Mail, Clock, CheckCircle, AlertCircle, Edit2, Image, Save, X, Ticket,
   Settings, CreditCard, Webhook, Server, Plus, Star, Link as LinkIcon, Upload, UserPlus, Truck, Monitor, Video, ShieldCheck, Trash2,
-  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin
+  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin, EyeOff
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { api } from '../services/api';
@@ -33,6 +33,9 @@ const AdminDashboard: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeEntry[]>([]);
+  
+  // Ticket Interaction States
+  const [revealedOtps, setRevealedOtps] = useState<Record<string, boolean>>({});
   
   // Inventory / Product Edit States
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -75,7 +78,7 @@ const AdminDashboard: React.FC = () => {
   const [newUserData, setNewUserData] = useState({ name: '', email: '', role: 'customer', password: '' });
 
   // Technician Edit State
-  const [newTechData, setNewTechData] = useState<Partial<Technician>>({ name: '', email: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
+  const [newTechData, setNewTechData] = useState<Partial<Technician>>({ name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
   const [isAddingTech, setIsAddingTech] = useState(false);
   
   // Ticket Management
@@ -132,6 +135,7 @@ const AdminDashboard: React.FC = () => {
   ];
 
   const TECH_ROLES = ["Network Engineer", "CCTV Specialist", "Software Support", "Field Technician", "System Administrator"];
+  const DEPARTMENTS = ["Infrastructure", "Security", "IT Support", "Field Ops", "Networking", "General"];
   const PRODUCT_CATEGORIES = ["Starlink", "Networking", "CCTV IP", "CCTV Analog", "Recorders", "Access Control", "Power", "Cables", "Accessories", "Office", "Computers"];
 
   // --- STYLING CONSTANTS ---
@@ -228,6 +232,16 @@ const AdminDashboard: React.FC = () => {
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 
+  const handleDeleteBooking = async (bookingId: string) => {
+      if(!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+      try {
+          await api.deleteBooking(bookingId, token);
+          setBookings(prev => prev.filter(b => b.id !== bookingId));
+      } catch(e) {
+          alert("Failed to delete booking.");
+      }
+  };
+
   const handleAssignTechnician = async (bookingId: string, technician: string) => {
      try {
        await api.assignTechnician(bookingId, technician, token);
@@ -276,12 +290,16 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleAddTechnician = async () => {
-      if(!newTechData.name?.trim() || !newTechData.email?.trim()) return;
+      if(!newTechData.name?.trim() || !newTechData.email?.trim()) {
+          alert("Name and Email are required");
+          return;
+      }
       try {
           const result = await api.addTechnician(newTechData, token);
           if (result.technicians) setTechnicians(result.technicians);
-          setNewTechData({ name: '', email: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
+          setNewTechData({ name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
           setIsAddingTech(false);
+          alert("Technician Added Successfully");
       } catch (error) {
           alert("Failed to add technician");
       }
@@ -300,6 +318,10 @@ const AdminDashboard: React.FC = () => {
       } catch (e) {
           alert("Failed to create user");
       }
+  };
+
+  const toggleOtpVisibility = (id: string) => {
+      setRevealedOtps(prev => ({...prev, [id]: !prev[id]}));
   };
 
   // --- ADMIN QUOTE ACTIONS ---
@@ -661,12 +683,17 @@ const AdminDashboard: React.FC = () => {
   const revenueData = [1200, 1900, 1500, 2200, 1800, 2800, 3500, 3100, 4200, 4500]; // Mock monthly revenue
   const chartLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
   
-  // New Analytics Data
+  // Analytics Data
   const techPerformance = technicians.map(t => t.jobsCompleted || 0);
   const techNames = technicians.map(t => t.name.split(' ')[0]);
   const customerRatings = [5, 4, 3, 2, 1].map(r => technicians.reduce((acc, t) => acc + (t.reviews?.filter(rv => Math.round(rv.rating) === r).length || 0), 0));
-  const activeUserCount = users.filter(u => u.isOnline).length;
-  const remoteSessionCount = stats.remoteSessions || 0;
+  
+  // Specific Requested Counts
+  const totalTechs = technicians.length;
+  const totalUsers = users.length;
+  const otpsGenerated = bookings.filter(b => b.completionCode).length;
+  // Estimate 'Job Assigned' by counting pending or in-progress tasks that have a technician assigned
+  const activeJobsCount = bookings.filter(b => (b.status === 'In Progress' || b.status === 'Assigned') && b.technician).length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans relative">
@@ -773,85 +800,82 @@ const AdminDashboard: React.FC = () => {
             {activeTab === 'overview' && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <OverviewCard title="Total Visits" value={stats.totalVisits.toLocaleString()} icon={Users} color="bg-blue-500" />
-                  <OverviewCard title="Open Tickets" value={stats.openTickets || 0} icon={MessageSquare} color="bg-red-500" />
-                  <OverviewCard title="Total Revenue" value={`GHS ${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} color="bg-green-500" />
-                  <OverviewCard title="Pending Quotes" value={stats.pendingQuotes} icon={FileText} color="bg-orange-500" />
-                </div>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <DashboardChart title="Revenue Growth (GHS)" data={revenueData} labels={chartLabels} type="line" color="#10b981" />
-                    <DashboardChart title="Monthly Traffic" data={[80, 120, 105, 140, 110, 170, 160, 200, 230, 250]} labels={chartLabels} type="bar" color="#3b82f6" />
+                  <OverviewCard title="Registered Users" value={totalUsers} icon={Users} color="bg-blue-500" />
+                  <OverviewCard title="Total Revenue" value={`GHS ${stats.totalRevenue?.toLocaleString() || 0}`} icon={DollarSign} color="bg-green-500" />
+                  <OverviewCard title="Active Orders" value={stats.activeOrders || 0} icon={ShoppingBag} color="bg-purple-500" />
+                  <OverviewCard title="Open Tickets" value={stats.openTickets || 0} icon={Ticket} color="bg-orange-500" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-1">
-                        <DashboardChart title="Technician Work Done" data={techPerformance} labels={techNames} type="bar" color="#8b5cf6" height={200} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <DashboardChart title="Customer Ratings" data={customerRatings} labels={['5★', '4★', '3★', '2★', '1★']} type="bar" color="#eab308" height={200} />
-                    </div>
-                    <div className="lg:col-span-1 flex flex-col gap-4">
-                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex-1 flex flex-col justify-center">
-                            <h3 className="text-gray-500 text-sm font-bold mb-2 uppercase flex items-center gap-2"><Users size={16} /> Active Users</h3>
-                            <p className="text-4xl font-bold text-slate-800">{activeUserCount}</p>
-                            <p className="text-xs text-green-500 mt-1 font-bold">+12% from last week</p>
-                        </div>
-                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex-1 flex flex-col justify-center">
-                            <h3 className="text-gray-500 text-sm font-bold mb-2 uppercase flex items-center gap-2"><Monitor size={16} /> Remote Sessions</h3>
-                            <p className="text-4xl font-bold text-slate-800">{remoteSessionCount}</p>
-                            <p className="text-xs text-blue-500 mt-1 font-bold">This Month</p>
-                        </div>
-                    </div>
+                   <div className="lg:col-span-2">
+                      <DashboardChart data={revenueData} labels={chartLabels} title="Revenue Trend" type="line" height={300} />
+                   </div>
+                   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                      <h3 className="font-bold text-slate-700 mb-4">Quick Actions</h3>
+                      <div className="space-y-3">
+                         <button onClick={() => setActiveTab('bookings')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
+                            <span className="text-sm font-medium">Manage Tickets</span>
+                            <ArrowRight size={16} className="text-slate-400" />
+                         </button>
+                         <button onClick={() => setActiveTab('users')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
+                            <span className="text-sm font-medium">View Users</span>
+                            <ArrowRight size={16} className="text-slate-400" />
+                         </button>
+                         <button onClick={() => setActiveTab('inventory')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
+                            <span className="text-sm font-medium">Update Inventory</span>
+                            <ArrowRight size={16} className="text-slate-400" />
+                         </button>
+                      </div>
+                   </div>
                 </div>
               </>
             )}
 
             {/* ORDERS TAB */}
             {activeTab === 'orders' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 text-slate-700 text-xs uppercase border-b">
-                                <tr>
-                                    <th className="p-4">Order ID</th>
-                                    <th className="p-4">Customer</th>
-                                    <th className="p-4">Total</th>
-                                    <th className="p-4">Status</th>
-                                    <th className="p-4">Date</th>
-                                    <th className="p-4">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-sm divide-y divide-gray-100">
-                                {orders.map(order => (
-                                    <tr key={order.orderId} className="hover:bg-slate-50">
-                                        <td className="p-4 font-mono font-medium text-slate-700">{order.orderId}</td>
-                                        <td className="p-4">
-                                            <div className="font-bold text-slate-900">{order.customer.name}</div>
-                                            <div className="text-xs text-slate-500">{order.customer.email}</div>
-                                        </td>
-                                        <td className="p-4 font-bold text-slate-800">GHS {order.total.toLocaleString()}</td>
-                                        <td className="p-4"><StatusBadge status={order.status} /></td>
-                                        <td className="p-4 text-slate-500">{new Date(order.date).toLocaleDateString()}</td>
-                                        <td className="p-4">
-                                            <select 
-                                                className="border border-gray-300 rounded p-1 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                                                value={order.status}
-                                                onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)}
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="Processing">Processing</option>
-                                                <option value="Out for Delivery">Out for Delivery</option>
-                                                <option value="Completed">Completed</option>
-                                                <option value="Cancelled">Cancelled</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-slate-500">
+                    <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b">
+                      <tr>
+                        <th className="px-6 py-3">Order ID</th>
+                        <th className="px-6 py-3">Customer</th>
+                        <th className="px-6 py-3">Total</th>
+                        <th className="px-6 py-3">Status</th>
+                        <th className="px-6 py-3">Date</th>
+                        <th className="px-6 py-3">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => (
+                        <tr key={order.orderId} className="bg-white border-b hover:bg-slate-50">
+                          <td className="px-6 py-4 font-medium text-slate-900">{order.orderId}</td>
+                          <td className="px-6 py-4">
+                            <div>{order.customer.name}</div>
+                            <div className="text-xs text-slate-400">{order.customer.email}</div>
+                          </td>
+                          <td className="px-6 py-4">GHS {order.total.toLocaleString()}</td>
+                          <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
+                          <td className="px-6 py-4">{new Date(order.date).toLocaleDateString()}</td>
+                          <td className="px-6 py-4">
+                            <select 
+                              value={order.status} 
+                              onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)}
+                              className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-1.5"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="Processing">Processing</option>
+                              <option value="Out for Delivery">Out for Delivery</option>
+                              <option value="Completed">Completed</option>
+                              <option value="Cancelled">Cancelled</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
             )}
 
             {/* SERVICE DESK & BOOKINGS TAB */}
@@ -871,14 +895,53 @@ const AdminDashboard: React.FC = () => {
                             ))}
                         </div>
                         <div className="flex gap-2">
-                            <Button onClick={() => setIsAddingTech(true)} variant="secondary" size="sm">
-                                <UserPlus size={16} className="mr-2" /> Add Technician
+                            <Button onClick={() => setIsAddingTech(!isAddingTech)} variant="secondary" size="sm">
+                                {isAddingTech ? "Cancel" : <><UserPlus size={16} className="mr-2" /> Add Technician</>}
                             </Button>
                             <Button onClick={() => setIsAddingBooking(!isAddingBooking)} size="sm">
                                 {isAddingBooking ? "Close Form" : <><Plus size={16} className="mr-2" /> Create Job Ticket</>}
                             </Button>
                         </div>
                     </div>
+
+                    {/* Add Technician Form */}
+                    {isAddingTech && (
+                        <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200 mb-6 animate-in slide-in-from-top-4">
+                            <h4 className="font-bold mb-4 text-lg text-slate-800 border-b pb-2 flex items-center gap-2">
+                                <UserCog className="text-blue-600" /> Register New Technician
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className={labelStyle}>Full Name</label>
+                                    <input className={inputStyle} value={newTechData.name} onChange={e => setNewTechData({...newTechData, name: e.target.value})} placeholder="Tech Name" />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Email Address</label>
+                                    <input className={inputStyle} value={newTechData.email} onChange={e => setNewTechData({...newTechData, email: e.target.value})} placeholder="tech@company.com" />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Phone Number</label>
+                                    <input className={inputStyle} value={newTechData.phone || ''} onChange={e => setNewTechData({...newTechData, phone: e.target.value})} placeholder="050..." />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Role</label>
+                                    <select className={inputStyle} value={newTechData.role} onChange={e => setNewTechData({...newTechData, role: e.target.value})}>
+                                        {TECH_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Department</label>
+                                    <select className={inputStyle} value={newTechData.department} onChange={e => setNewTechData({...newTechData, department: e.target.value})}>
+                                        {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                                <button onClick={() => setIsAddingTech(false)} className="px-6 py-2 text-slate-500 hover:bg-slate-50 rounded-lg transition">Cancel</button>
+                                <Button onClick={handleAddTechnician}>Register Technician</Button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* New Booking Form */}
                     {isAddingBooking && (
@@ -975,6 +1038,7 @@ const AdminDashboard: React.FC = () => {
                                     <th className="p-4">Subject & Client</th>
                                     <th className="p-4">Assignee</th>
                                     <th className="p-4">Status</th>
+                                    <th className="p-4">OTP Code</th>
                                     <th className="p-4 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -1009,10 +1073,30 @@ const AdminDashboard: React.FC = () => {
                                                 <option value="Completed">Completed</option>
                                             </select>
                                         </td>
+                                        <td className="p-4">
+                                            <button 
+                                                onClick={() => toggleOtpVisibility(booking.id)}
+                                                className="flex items-center gap-2 font-mono bg-slate-100 px-2 py-1 rounded text-slate-600 font-bold tracking-widest text-xs border border-slate-200 hover:bg-slate-200 transition"
+                                                title="Click to reveal/hide"
+                                            >
+                                                {booking.completionCode ? (
+                                                    <>
+                                                        {revealedOtps[booking.id] ? booking.completionCode : '****'}
+                                                        {revealedOtps[booking.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                                                    </>
+                                                ) : (
+                                                    <span className="text-slate-400">-</span>
+                                                )}
+                                            </button>
+                                        </td>
                                         <td className="p-4 text-right">
                                             <div className="flex justify-end gap-2">
-                                                <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded">
-                                                    <MoreVertical size={18} />
+                                                <button 
+                                                    onClick={() => handleDeleteBooking(booking.id)}
+                                                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                                    title="Delete Ticket"
+                                                >
+                                                    <Trash2 size={18} />
                                                 </button>
                                             </div>
                                         </td>
@@ -1020,7 +1104,7 @@ const AdminDashboard: React.FC = () => {
                                 ))}
                                 {bookings.filter(b => bookingFilter === 'All' || b.status === bookingFilter).length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="p-8 text-center text-slate-400">No tickets found in this view.</td>
+                                        <td colSpan={6} className="p-8 text-center text-slate-400">No tickets found in this view.</td>
                                     </tr>
                                 )}
                             </tbody>
