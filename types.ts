@@ -54,6 +54,15 @@ export interface QuoteFormData {
   timeline: string;
 }
 
+export interface Technician {
+  id: string;
+  name: string;
+  role: string;
+  rating: number;
+  feedback: string;
+  status: 'Active' | 'Busy' | 'Offline';
+}
+
 // --- E-COMMERCE TYPES ---
 
 export interface Product {

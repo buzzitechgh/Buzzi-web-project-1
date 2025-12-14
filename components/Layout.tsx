@@ -18,7 +18,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isShaking, setIsShaking] = useState(false);
 
   // Define pages that have a light background at the top, requiring dark header text immediately
-  const isLightPage = ['/store', '/checkout'].includes(location.pathname);
+  const isLightPage = ['/store', '/checkout', '/tracking'].includes(location.pathname);
   
   // Check if we are on an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -58,6 +58,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Store', path: '/store' },
+    { name: 'Track Order', path: '/tracking' },
     { name: 'Services', path: '/services' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },
@@ -247,7 +248,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <ul className="space-y-2">
                 <li><Link to="/store" className="hover:text-primary-400 transition">Shop Devices</Link></li>
                 <li><Link to="/services" className="hover:text-primary-400 transition">Our Services</Link></li>
-                <li><Link to="/contact" className="hover:text-primary-400 transition">Contact Support</Link></li>
+                <li><Link to="/tracking" className="hover:text-primary-400 transition">Track Order</Link></li>
                 <li><Link to="/booking" className="hover:text-primary-400 transition">Book Appointment</Link></li>
               </ul>
             </div>

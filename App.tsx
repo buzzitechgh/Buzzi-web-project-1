@@ -11,6 +11,7 @@ import Booking from './pages/Booking';
 import Quote from './pages/Quote';
 import Store from './pages/Store';
 import Checkout from './pages/Checkout';
+import OrderTracking from './pages/OrderTracking';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 
@@ -41,6 +42,7 @@ const App: React.FC = () => {
           <Route path="/quote" element={<Quote />} />
           <Route path="/store" element={<Store />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/tracking" element={<OrderTracking />} />
           
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLogin />} />

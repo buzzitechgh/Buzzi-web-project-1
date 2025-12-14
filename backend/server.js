@@ -5,12 +5,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const connectDB = require('./config/db');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const formRoutes = require('./routes/formRoutes');
 const authRoutes = require('./routes/authRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
 
@@ -34,13 +36,18 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// 3. Routes
+// 3. Static Folder for Uploaded Images
+const uploadsPath = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// 4. Routes
 app.use('/api/products', productRoutes); // Store Products
 app.use('/api/orders', orderRoutes);     // Checkout/Orders
 app.use('/api/forms', formRoutes);       // Contact, Booking, Quote
 app.use('/api/auth', authRoutes);        // Admin Login
+app.use('/api/upload', uploadRoutes);    // Image Uploads
 
-// 4. Global Error Handler
+// 5. Global Error Handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 

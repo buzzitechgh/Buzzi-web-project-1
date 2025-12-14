@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, Mail, MapPin, Send, ChevronDown } from 'lucide-react';
+import { Phone, Mail, MapPin, Send, ChevronDown, Ticket, CheckCircle } from 'lucide-react';
 import Button from '../components/Button';
 import { SERVICES, COMPANY_INFO } from '../constants';
 import { api } from '../services/api';
@@ -15,14 +15,18 @@ const Contact: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [ticketId, setTicketId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.submitContactForm(formData);
-      setSuccess(true);
-      setFormData({ name: '', email: '', phone: '', service: '', message: '' });
+      const response = await api.submitContactForm(formData);
+      if (response.success) {
+          setSuccess(true);
+          if (response.ticketId) setTicketId(response.ticketId);
+          setFormData({ name: '', email: '', phone: '', service: '', message: '' });
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -39,7 +43,7 @@ const Contact: React.FC = () => {
       <section className="bg-slate-900 text-white pt-32 pb-16">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
-          <p className="text-slate-300">Get in touch with our team for immediate support.</p>
+          <p className="text-slate-300">Get in touch with our team for sales or technical support.</p>
         </div>
       </section>
 
@@ -107,15 +111,22 @@ const Contact: React.FC = () => {
               
               {success ? (
                 <div className="bg-green-50 border border-green-200 text-green-700 p-6 rounded-xl text-center">
-                  <h4 className="text-xl font-bold mb-4">Message Sent!</h4>
+                  <div className="flex justify-center mb-4"><CheckCircle size={48} className="text-green-600" /></div>
+                  <h4 className="text-xl font-bold mb-4">Message Received!</h4>
                   <p className="mb-4">Thank you for contacting Buzzitech. We have received your details.</p>
+                  
+                  {ticketId && (
+                      <div className="bg-white border border-green-300 rounded-lg p-4 mb-4 inline-block">
+                          <p className="text-xs uppercase text-slate-500 font-bold mb-1">Support Ticket ID</p>
+                          <p className="text-2xl font-mono font-bold text-slate-900 tracking-wider">{ticketId}</p>
+                          <p className="text-xs text-slate-400 mt-1">Keep this ID for reference</p>
+                      </div>
+                  )}
+
                   <p className="text-sm text-slate-500 mb-6">
-                    If you don't receive a confirmation shortly, you can also email us directly at:<br/>
-                    <a href="mailto:buzzitechgh@gmail.com" className="text-primary-600 font-bold underline hover:text-primary-800">
-                      buzzitechgh@gmail.com
-                    </a>
+                    We usually respond within 2 hours during business hours.
                   </p>
-                  <button onClick={() => setSuccess(false)} className="text-sm font-semibold underline text-primary-600 hover:text-primary-800">Send another message</button>
+                  <button onClick={() => { setSuccess(false); setTicketId(null); }} className="text-sm font-semibold underline text-primary-600 hover:text-primary-800">Send another message</button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -155,7 +166,7 @@ const Contact: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Service Needed</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Service Needed / Inquiry Type</label>
                     <div className="relative">
                       <select 
                         name="service"
@@ -164,11 +175,18 @@ const Contact: React.FC = () => {
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition bg-white text-slate-900 appearance-none hover:border-primary-400 cursor-pointer"
                       >
                         <option value="">Select a Service...</option>
+                        <option value="Technical Support">Technical Support (Create Ticket)</option>
+                        <option value="Sales Inquiry">Sales Inquiry</option>
                         {SERVICES.map(s => <option key={s.id} value={s.title}>{s.title}</option>)}
-                        <option value="Other">Other / General Inquiry</option>
+                        <option value="Other">Other / General</option>
                       </select>
                       <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
                     </div>
+                    {formData.service === 'Technical Support' && (
+                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                            <Ticket size={12} /> A Support Ticket ID will be generated for tracking.
+                        </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>

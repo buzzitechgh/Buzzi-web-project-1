@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Filter, Search, Plus, ArrowUpDown } from 'lucide-react';
+import { ShoppingCart, Filter, Search, Plus, ArrowUpDown, AlertCircle } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { useCart } from '../context/CartContext';
 import { Product } from '../types';
@@ -33,6 +33,8 @@ const Store: React.FC = () => {
   });
 
   const handleAddToCart = (e: React.MouseEvent, product: Product) => {
+    if (product.stock <= 0) return;
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -62,8 +64,6 @@ const Store: React.FC = () => {
   };
 
   // Calculate approximate cart position based on viewport
-  // On Desktop: Cart is roughly 200px from right (inside container)
-  // On Mobile: Cart is roughly 60px from right
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const targetX = typeof window !== 'undefined' ? window.innerWidth - (isMobile ? 80 : 150) : 0;
   const targetY = 30; // Approx header height center
@@ -177,37 +177,45 @@ const Store: React.FC = () => {
               const discountPercentage = product.originalPrice 
                 ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) 
                 : 0;
+              
+              const isOutOfStock = product.stock <= 0;
 
               return (
                 <motion.div
                   key={product.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 group flex flex-col"
+                  className={`bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 group flex flex-col ${isOutOfStock ? 'opacity-80' : ''}`}
                 >
                   <div className="relative h-64 overflow-hidden bg-gray-100 p-4 flex items-center justify-center">
                     <img 
                       src={product.image} 
                       alt={product.name} 
-                      className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500 mix-blend-multiply" 
+                      className={`h-full w-full object-contain transition-transform duration-500 mix-blend-multiply ${!isOutOfStock ? 'group-hover:scale-110' : 'grayscale'}`} 
                     />
                     
                     {/* Discount Badge */}
-                    {discountPercentage > 0 && (
+                    {discountPercentage > 0 && !isOutOfStock && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10">
                         -{discountPercentage}%
                       </span>
                     )}
 
                     {/* Stock Badge */}
-                    {product.stock < 10 && (
+                    {isOutOfStock ? (
+                        <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-20">
+                            <span className="bg-slate-800 text-white text-sm font-bold px-4 py-2 rounded-full transform rotate-[-5deg] shadow-lg border-2 border-white">
+                                Out of Stock
+                            </span>
+                        </div>
+                    ) : product.stock < 10 && (
                       <span className="absolute top-2 right-2 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded border border-orange-200 z-10">
                         Only {product.stock} Left
                       </span>
                     )}
                     
-                    {/* Feature Badge (Moved to bottom left to avoid overlap with discount) */}
-                    {product.category === 'Starlink' && (
+                    {/* Feature Badge */}
+                    {product.category === 'Starlink' && !isOutOfStock && (
                       <span className="absolute bottom-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10">
                         High Speed
                       </span>
@@ -248,8 +256,9 @@ const Store: React.FC = () => {
                       <motion.button
                         whileTap={{ scale: 0.8 }}
                         onClick={(e) => handleAddToCart(e, product)}
-                        className="bg-slate-900 hover:bg-primary-600 text-white p-3 rounded-xl transition-colors shadow-lg active:shadow-inner flex items-center justify-center relative overflow-hidden"
-                        title="Add to Cart"
+                        disabled={isOutOfStock}
+                        className={`${isOutOfStock ? 'bg-gray-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-primary-600'} text-white p-3 rounded-xl transition-colors shadow-lg active:shadow-inner flex items-center justify-center relative overflow-hidden`}
+                        title={isOutOfStock ? "Out of Stock" : "Add to Cart"}
                       >
                         <Plus size={20} />
                       </motion.button>

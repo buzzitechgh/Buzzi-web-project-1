@@ -1,13 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CheckCircle, Shield, Cpu, Network, Zap, Satellite, Video, Server, Star, Wifi, ShoppingCart, Globe } from 'lucide-react';
+import { ArrowRight, CheckCircle, Shield, Cpu, Network, Zap, Satellite, Video, Server, Star, Wifi, ShoppingCart, Globe, PhoneCall } from 'lucide-react';
 import Button from '../components/Button';
 import { SERVICES } from '../constants';
 import { Link } from 'react-router-dom';
 import NetworkBackground from '../components/NetworkBackground';
+import { api } from '../services/api';
 
 const Home: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [leadContact, setLeadContact] = useState("");
+  const [leadSent, setLeadSent] = useState(false);
+
+  const handleLeadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadContact) return;
+    await api.submitLead(leadContact);
+    setLeadSent(true);
+    setTimeout(() => setLeadSent(false), 3000);
+    setLeadContact("");
+  };
 
   // 5 Specific Slides with Professional Imagery
   const slides = [
@@ -286,7 +298,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section with Lead Form */}
       <section className="py-24 bg-slate-50 relative overflow-hidden">
         <div className="absolute inset-0 bg-circuit opacity-5"></div>
         <div className="container mx-auto px-4 relative z-10 text-center">
@@ -294,9 +306,35 @@ const Home: React.FC = () => {
           <p className="text-slate-600 max-w-2xl mx-auto mb-10 text-lg">
             From CCTV and Starlink to POS and Cloud solutions, we power your business.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
+          
+          <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12">
             <Button to="/contact" className="bg-primary-800 text-white hover:bg-primary-900 shadow-xl">Contact Us</Button>
             <Button to="/quote" variant="outline" className="border-primary-800 text-primary-800 hover:bg-primary-50">Request Quote</Button>
+          </div>
+
+          {/* Quick Lead Generation Form */}
+          <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+             <h4 className="text-lg font-bold text-slate-900 mb-2">Request a Quick Callback</h4>
+             <p className="text-sm text-slate-500 mb-4">Enter your number or email, and we'll call you ASAP.</p>
+             {leadSent ? (
+               <div className="bg-green-50 text-green-700 p-3 rounded-lg flex items-center justify-center gap-2">
+                 <CheckCircle size={18} /> Request Sent!
+               </div>
+             ) : (
+               <form onSubmit={handleLeadSubmit} className="flex gap-2">
+                 <input 
+                   type="text" 
+                   required
+                   placeholder="Your Phone / Email" 
+                   value={leadContact}
+                   onChange={(e) => setLeadContact(e.target.value)}
+                   className="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-900 bg-white"
+                 />
+                 <button type="submit" className="bg-brand-yellow text-slate-900 font-bold px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors">
+                   <PhoneCall size={20} />
+                 </button>
+               </form>
+             )}
           </div>
         </div>
       </section>
