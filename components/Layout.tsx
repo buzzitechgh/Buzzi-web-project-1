@@ -6,12 +6,10 @@ import ChatWidget from './ChatWidget';
 import Logo from './Logo';
 import NetworkCursor from './NetworkCursor';
 import { useCart } from '../context/CartContext';
-import { api } from '../services/api';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [customLogo, setCustomLogo] = useState<string | null>(null);
   
   // Auth State
   const [userSession, setUserSession] = useState<{ type: 'admin' | 'tech' | 'customer', name: string } | null>(null);
@@ -34,14 +32,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setIsScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll);
-    
-    // Fetch custom logo setting
-    api.getSettings("").then(settings => {
-        if (settings && settings.logoUrl) {
-            setCustomLogo(settings.logoUrl);
-        }
-    });
-
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -156,7 +146,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {/* Logo */}
             <Link to="/" className="flex items-center group">
                {/* Pass lightMode true if NOT scrolled AND NOT a light page */}
-               <Logo lightMode={!isScrolled && !isLightPage} className="h-12" customSrc={customLogo} />
+               <Logo lightMode={!isScrolled && !isLightPage} className="h-12" />
             </Link>
 
             {/* Desktop Nav */}
@@ -304,7 +294,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {/* Company Info */}
             <div className="space-y-4">
               <div className="flex items-start -ml-2">
-                 <Logo lightMode={true} className="h-10 scale-90 origin-left" customSrc={customLogo} />
+                 <Logo lightMode={true} className="h-10 scale-90 origin-left" />
               </div>
               <p className="text-sm leading-relaxed max-w-xs mt-2">
                 Professional Tech Support & Digital Solutions. Providing top-tier IT services for businesses in Ghana.

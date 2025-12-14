@@ -152,9 +152,10 @@ const LoadingScreen: React.FC = () => {
           initial={{ opacity: 0, scale: 0.8, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="mb-6"
+          className="mb-6 flex justify-center items-center"
         >
-          <Logo className="h-24 scale-125" lightMode={true} />
+          {/* Increased height for loading screen logo visibility */}
+          <Logo className="h-32 w-auto" lightMode={true} />
         </motion.div>
 
         <motion.div 

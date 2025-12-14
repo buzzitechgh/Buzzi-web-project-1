@@ -35,18 +35,40 @@ export const generateInvoice = (data: QuoteFormData) => {
   doc.setFillColor(colors.navy[0], colors.navy[1], colors.navy[2]);
   doc.rect(0, 0, pageWidth, 8, 'F');
 
-  drawLogoIcon(margin, 20, 12);
+  // Attempt to load custom logo from settings
+  let logoDrawn = false;
+  try {
+      const settings = localStorage.getItem('buzzitech_settings');
+      if (settings) {
+          const parsed = JSON.parse(settings);
+          if (parsed.logoUrl && parsed.logoUrl.startsWith('data:image')) {
+              // Add Custom Logo Image if it is a Data URI (Base64)
+              // We assume standard aspect ratio, restrict height to ~15
+              doc.addImage(parsed.logoUrl, 'PNG', margin, 15, 30, 15, undefined, 'FAST');
+              logoDrawn = true;
+          }
+      }
+  } catch (e) {
+      console.warn("Could not load custom logo into PDF", e);
+  }
+
+  // Fallback to geometric if no image
+  if (!logoDrawn) {
+      drawLogoIcon(margin, 20, 12);
+  }
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  doc.text("BUZZITECH", margin + 18, 30);
+  // Adjust X position based on logo type (Image vs Vector)
+  const titleX = logoDrawn ? margin + 35 : margin + 18;
+  doc.text("BUZZITECH", titleX, 30);
   
   doc.setFontSize(9);
   doc.setTextColor(colors.cyan[0], colors.cyan[1], colors.cyan[2]);
   doc.setFont("helvetica", "bold");
   doc.setCharSpace(2);
-  doc.text("IT SOLUTIONS & SERVICES", margin + 18, 35);
+  doc.text("IT SOLUTIONS & SERVICES", titleX, 35);
   doc.setCharSpace(0);
 
   const metaX = pageWidth - margin;

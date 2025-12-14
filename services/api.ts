@@ -758,7 +758,7 @@ export const api = {
       const data = await response.json();
       return data.image.startsWith('http') ? data.image : `${(import.meta as any).env?.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${data.image}`;
     } catch (e) {
-      console.warn("Backend upload failed, falling back to local base64 storage.");
+      console.log("Backend not available, switching to local Base64 storage (Demo Mode).");
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
@@ -792,6 +792,8 @@ export const api = {
 
   saveSettings: async (settings: any, token: string) => {
       localStorage.setItem('buzzitech_settings', JSON.stringify(settings));
+      // Dispatch event to notify all listeners (like the Logo component) that settings have changed
+      window.dispatchEvent(new Event('settingsUpdated'));
       return { success: true };
   },
 
