@@ -152,7 +152,7 @@ const LoadingScreen: React.FC = () => {
           initial={{ opacity: 0, scale: 0.8, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="mb-6 bg-slate-900/50 backdrop-blur-sm p-6 rounded-3xl border border-white/5 shadow-2xl"
+          className="mb-6"
         >
           <Logo className="h-24 scale-125" lightMode={true} />
         </motion.div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, Mail, MapPin, Send, ChevronDown, Ticket, CheckCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Send, ChevronDown, Ticket, CheckCircle, Upload, X } from 'lucide-react';
 import Button from '../components/Button';
 import { SERVICES, COMPANY_INFO } from '../constants';
 import { api } from '../services/api';
@@ -11,11 +11,13 @@ const Contact: React.FC = () => {
     email: '',
     phone: '',
     service: '',
-    message: ''
+    message: '',
+    attachment: null
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +27,8 @@ const Contact: React.FC = () => {
       if (response.success) {
           setSuccess(true);
           if (response.ticketId) setTicketId(response.ticketId);
-          setFormData({ name: '', email: '', phone: '', service: '', message: '' });
+          setFormData({ name: '', email: '', phone: '', service: '', message: '', attachment: null });
+          setPreview(null);
       }
     } catch (error) {
       console.error(error);
@@ -36,6 +39,23 @@ const Contact: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setFormData(prev => ({ ...prev, attachment: file }));
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setPreview(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const removeAttachment = () => {
+      setFormData(prev => ({ ...prev, attachment: null }));
+      setPreview(null);
   };
 
   return (
@@ -199,6 +219,25 @@ const Contact: React.FC = () => {
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
                     ></textarea>
                   </div>
+
+                  {formData.service === 'Technical Support' && (
+                      <div className="bg-slate-50 p-4 rounded-lg border border-dashed border-gray-300">
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Attach Image (Optional)</label>
+                          {preview ? (
+                              <div className="relative inline-block">
+                                  <img src={preview} alt="Attachment" className="h-24 w-auto rounded border" />
+                                  <button onClick={removeAttachment} type="button" className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600">
+                                      <X size={12} />
+                                  </button>
+                              </div>
+                          ) : (
+                              <label className="flex items-center gap-2 cursor-pointer text-primary-600 hover:text-primary-700 text-sm">
+                                  <Upload size={18} /> <span>Click to upload screenshot/photo</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                              </label>
+                          )}
+                      </div>
+                  )}
                   
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Sending...' : <><span className="mr-2">Send Message</span> <Send size={18} /></>}

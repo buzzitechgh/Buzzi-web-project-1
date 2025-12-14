@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart, Lock } from 'lucide-react';
+import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart, Lock, User } from 'lucide-react';
 import { COMPANY_INFO } from '../constants';
 import ChatWidget from './ChatWidget';
 import Logo from './Logo';
 import NetworkCursor from './NetworkCursor';
 import { useCart } from '../context/CartContext';
+import { api } from '../services/api';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [customLogo, setCustomLogo] = useState<string | null>(null);
   const location = useLocation();
   const { totalItems, lastAdded } = useCart();
   
@@ -17,17 +19,25 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isBumping, setIsBumping] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
 
-  // Define pages that have a light background at the top, requiring dark header text immediately
-  const isLightPage = ['/store', '/checkout', '/tracking'].includes(location.pathname);
+  // Define pages that have a light background at the top
+  const isLightPage = ['/store', '/checkout', '/login'].includes(location.pathname);
   
-  // Check if we are on an admin route
-  const isAdminRoute = location.pathname.startsWith('/admin');
+  // Check if we are on an admin route or dashboard
+  const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/technician');
 
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll);
+    
+    // Fetch custom logo setting
+    api.getSettings("").then(settings => {
+        if (settings && settings.logoUrl) {
+            setCustomLogo(settings.logoUrl);
+        }
+    });
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -74,7 +84,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     ? 'text-slate-800' 
     : 'text-white';
 
-  // If Admin Route, render a simplified layout without the standard header/footer
+  // If Admin/Dashboard Route, render a simplified layout
   if (isAdminRoute) {
     return (
       <div className="flex flex-col min-h-screen bg-slate-50">
@@ -116,7 +126,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {/* Logo */}
             <Link to="/" className="flex items-center group">
                {/* Pass lightMode true if NOT scrolled AND NOT a light page */}
-               <Logo lightMode={!isScrolled && !isLightPage} className="h-12" />
+               <Logo lightMode={!isScrolled && !isLightPage} className="h-12" customSrc={customLogo} />
             </Link>
 
             {/* Desktop Nav */}
@@ -148,6 +158,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     {totalItems}
                   </span>
                 )}
+              </Link>
+
+              <Link
+                to="/login"
+                className={`flex items-center gap-1 text-sm font-medium transition-colors ${headerTextColorClass}`}
+              >
+                <User size={18} /> Login
               </Link>
 
               <Link
@@ -204,6 +221,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </Link>
               ))}
               <Link
+                to="/login"
+                className="block px-3 py-3 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              >
+                Customer / Tech Login
+              </Link>
+              <Link
                 to="/quote"
                 className="block w-full text-center mt-4 px-4 py-3 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700"
               >
@@ -229,7 +252,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {/* Company Info */}
             <div className="space-y-4">
               <div className="flex items-start -ml-2">
-                 <Logo lightMode={true} className="h-10 scale-90 origin-left" />
+                 <Logo lightMode={true} className="h-10 scale-90 origin-left" customSrc={customLogo} />
               </div>
               <p className="text-sm leading-relaxed max-w-xs mt-2">
                 Professional Tech Support & Digital Solutions. Providing top-tier IT services for businesses in Ghana.
@@ -282,9 +305,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           
           <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
             <p>&copy; {new Date().getFullYear()} Buzzitech IT Solutions & Services. All rights reserved.</p>
-            <Link to="/admin" className="mt-4 md:mt-0 flex items-center gap-2 text-slate-500 hover:text-white transition-colors duration-200">
-              <Lock size={14} /> <span className="text-xs font-semibold uppercase tracking-wider">Admin Portal</span>
-            </Link>
+            <div className="flex gap-4 mt-4 md:mt-0">
+               <Link to="/login" className="hover:text-white transition">Staff Login</Link>
+               <Link to="/admin" className="hover:text-white transition">Admin Portal</Link>
+            </div>
           </div>
         </div>
       </footer>

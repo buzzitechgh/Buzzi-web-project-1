@@ -1,12 +1,5 @@
 import { COMPANY_INFO } from "../constants";
-
-export interface KnowledgeEntry {
-  id: string;
-  category: 'pricing' | 'service' | 'general' | 'support' | 'company' | 'troubleshooting' | 'smalltalk';
-  keywords: string[];
-  answer: string;
-  action?: string; // Action trigger for UI components
-}
+import { KnowledgeEntry } from "../types";
 
 export const KNOWLEDGE_BASE: KnowledgeEntry[] = [
   // --- INTERACTIVE ACTIONS ---

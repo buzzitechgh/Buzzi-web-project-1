@@ -14,6 +14,9 @@ import Checkout from './pages/Checkout';
 import OrderTracking from './pages/OrderTracking';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import Login from './pages/Login';
+import CustomerDashboard from './pages/CustomerDashboard';
+import TechnicianDashboard from './pages/TechnicianDashboard';
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +46,11 @@ const App: React.FC = () => {
           <Route path="/store" element={<Store />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/tracking" element={<OrderTracking />} />
+          
+          {/* Auth & Portals */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/dashboard" element={<CustomerDashboard />} />
+          <Route path="/technician" element={<TechnicianDashboard />} />
           
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLogin />} />

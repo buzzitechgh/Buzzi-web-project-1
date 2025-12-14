@@ -13,6 +13,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const formRoutes = require('./routes/formRoutes');
 const authRoutes = require('./routes/authRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const knowledgeRoutes = require('./routes/knowledgeRoutes'); // Imported
 
 const app = express();
 
@@ -25,7 +26,7 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true
 }));
-app.use(express.json()); // Parse JSON bodies
+app.use(express.json({ limit: '10mb' })); // Increased limit for JSON uploads
 app.use(morgan('dev')); // Logging
 
 // Rate Limiting for Public APIs (Prevent Abuse)
@@ -46,6 +47,7 @@ app.use('/api/orders', orderRoutes);     // Checkout/Orders
 app.use('/api/forms', formRoutes);       // Contact, Booking, Quote
 app.use('/api/auth', authRoutes);        // Admin Login
 app.use('/api/upload', uploadRoutes);    // Image Uploads
+app.use('/api/knowledge', knowledgeRoutes); // Chatbot Knowledge Base
 
 // 5. Global Error Handler
 app.use((err, req, res, next) => {

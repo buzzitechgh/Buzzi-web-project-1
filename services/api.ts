@@ -1,4 +1,4 @@
-import { ContactFormData, AppointmentFormData, QuoteFormData, Order, Product, Technician } from '../types';
+import { ContactFormData, AppointmentFormData, QuoteFormData, Order, Product, Technician, ChatMessage, Meeting, User, KnowledgeEntry, LoginLog } from '../types';
 import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
 import { PRODUCTS } from '../data/products'; // Import local data for offline fallback
 import { N8N_CHAT_WEBHOOK_URL } from '../constants';
@@ -23,10 +23,14 @@ const getStoredSettings = () => {
   return saved ? JSON.parse(saved) : {};
 };
 
-// Helper to send to Formspree
-const sendToFormspree = async (data: any, formType: string) => {
+// --- DYNAMIC KNOWLEDGE BASE (In-Memory Mock for Demo) ---
+let MOCK_KNOWLEDGE_BASE: KnowledgeEntry[] = [...KNOWLEDGE_BASE];
+
+// Helper to send to Formspree or Webhook
+const sendToExternal = async (data: any, formType: string) => {
   const settings = getStoredSettings();
-  const url = settings.formspreeUrl || DEFAULT_FORMSPREE_URL;
+  // Prefer n8n webhook if configured for forms, else Formspree
+  const url = settings.n8nWebhook || settings.formspreeUrl || DEFAULT_FORMSPREE_URL;
   
   try {
     const response = await fetch(url, {
@@ -44,65 +48,27 @@ const sendToFormspree = async (data: any, formType: string) => {
     });
     
     if (!response.ok) {
-        console.warn(`Formspree submission failed: ${response.statusText}`);
+        console.warn(`Submission failed: ${response.statusText}`);
     }
   } catch (error) {
-    console.warn("Formspree connection error:", error);
-  }
-};
-
-// Utility for making API requests
-const request = async (endpoint: string, method: string, data?: any, token?: string) => {
-  try {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const config: RequestInit = {
-      method,
-      headers,
-    };
-
-    if (data) {
-      config.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${API_URL}/${endpoint}`, config);
-    
-    // Check if response is JSON
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
-       const responseData = await response.json();
-       if (!response.ok) {
-           throw new Error(responseData.message || `Server error: ${response.status}`);
-       }
-       return responseData;
-    } else {
-       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-       return { success: true }; // Fallback for non-json OK responses
-    }
-
-  } catch (error: any) {
-    console.warn(`Backend API (${endpoint}) unreachable:`, error.message);
-    throw error;
+    console.warn("Connection error:", error);
   }
 };
 
 // Mock Data Stores for Demo
 let MOCK_TECHNICIANS: Technician[] = [
-  { id: 't1', name: "Kwame Osei", role: "Network Engineer", rating: 4.8, feedback: "Very professional cabling work.", status: 'Active' },
-  { id: 't2', name: "John Mensah", role: "CCTV Specialist", rating: 4.5, feedback: "Clean installation, polite.", status: 'Busy' },
-  { id: 't3', name: "Sarah Addo", role: "Software Support", rating: 5.0, feedback: "Solved the POS issue quickly.", status: 'Active' },
-  { id: 't4', name: "Emmanuel K.", role: "Field Technician", rating: 4.2, feedback: "Good work but arrived slightly late.", status: 'Active' }
+  { 
+    id: 't1', name: "Kwame Osei", email: 'kwame@buzzitech.com', role: "Network Engineer", department: "Infrastructure", rating: 4.8, feedback: "Very professional cabling work.", status: 'Active',
+    reviews: [{ customer: 'John Doe', rating: 5, comment: 'Excellent work!', date: '2023-11-20' }],
+    jobsCompleted: 145
+  },
+  { id: 't2', name: "John Mensah", email: 'john@buzzitech.com', role: "CCTV Specialist", department: "Security", rating: 4.5, feedback: "Clean installation, polite.", status: 'Busy', reviews: [], jobsCompleted: 89 },
+  { id: 't3', name: "Sarah Addo", email: 'sarah@buzzitech.com', role: "Software Support", department: "IT Support", rating: 5.0, feedback: "Solved the POS issue quickly.", status: 'Active', reviews: [], jobsCompleted: 112 },
+  { id: 't4', name: "Emmanuel K.", email: 'emmanuel@buzzitech.com', role: "Field Technician", department: "Field Ops", rating: 4.2, feedback: "Good work but arrived slightly late.", status: 'Active', reviews: [], jobsCompleted: 67 }
 ];
 
 let MOCK_ORDERS = [
   {
-    _id: 'mock-1',
     orderId: 'ORD-1715623',
     customer: { 
       name: 'Kwame Osei', 
@@ -119,7 +85,6 @@ let MOCK_ORDERS = [
     date: new Date(Date.now() - 86400000).toISOString()
   },
   {
-    _id: 'mock-2',
     orderId: 'ORD-1715628',
     customer: { 
       name: 'Sarah Mensah', 
@@ -140,293 +105,539 @@ let MOCK_ORDERS = [
   }
 ];
 
+let MOCK_QUOTES: QuoteFormData[] = [
+    {
+      name: 'TechHub Ghana',
+      email: 'procurement@techhub.com',
+      phone: '0302999999',
+      serviceType: 'CCTV Security',
+      grandTotal: 15400,
+      description: '16 Channel Installation with 4K Cameras',
+      timeline: 'Urgent',
+      items: [],
+      date: new Date().toISOString()
+    }
+];
+
+// Mock Bookings Data
+let MOCK_BOOKINGS = [
+  {
+     id: 'bk-1',
+     name: 'John Doe',
+     email: 'john@gmail.com',
+     phone: '0558493021',
+     serviceType: 'Starlink Setup',
+     date: '2023-11-20',
+     time: '14:00',
+     status: 'Completed',
+     technician: 'Kwame Osei', 
+     taskStatus: 'Done',
+     rating: 5,
+     workDone: 'Mounted dish on roof, routed cable through attic, set up router. Speed test: 150Mbps.',
+     customerFeedback: 'Excellent service, very neat work.'
+  },
+  {
+     id: 'bk-2',
+     name: 'Anita Ofori',
+     email: 'anita@yahoo.com',
+     phone: '0204938271',
+     serviceType: 'CCTV Survey',
+     date: '2023-11-22',
+     time: '10:00',
+     status: 'Pending',
+     technician: null,
+     taskStatus: 'Unassigned',
+     rating: null
+  }
+];
+
+// Mock Messages
+let MOCK_MESSAGES = [
+  {
+    id: 'msg-1',
+    ticketId: 'TKT-829301',
+    name: 'David Boateng',
+    email: 'david.b@company.com',
+    phone: '0244000000',
+    service: 'Technical Support',
+    message: 'We need structured cabling for our new office block in Tema.',
+    date: new Date(Date.now() - 10000000).toISOString(),
+    status: 'Open',
+    replies: []
+  },
+  {
+    id: 'msg-2',
+    name: 'Grace Appiah',
+    email: 'grace@gmail.com',
+    phone: '0500000000',
+    service: 'General Inquiry',
+    message: 'Do you sell laptop batteries for HP Elitebook?',
+    date: new Date(Date.now() - 50000000).toISOString(),
+    status: 'Resolved',
+    replies: [{ sender: 'Admin', text: 'Yes, we have them in stock.', date: new Date().toISOString() }]
+  }
+];
+
+// Mock Communications Data
+let MOCK_USERS: User[] = [
+    { id: 'u1', name: 'Buzzitech Admin', email: 'admin@buzzitech.com', role: 'admin', status: 'Active', isOnline: true, lastLogin: new Date().toISOString(), ipAddress: '192.168.1.1', location: 'Accra, GH' },
+    { id: 'u2', name: 'Kwame Osei', email: 'kwame@buzzitech.com', role: 'technician', status: 'Active', isOnline: false, lastLogin: new Date(Date.now() - 3600000).toISOString(), ipAddress: '197.234.12.3', location: 'Kumasi, GH' },
+    { id: 'u3', name: 'John Doe', email: 'john@gmail.com', role: 'customer', status: 'Active', isOnline: true, lastLogin: new Date(Date.now() - 60000).toISOString(), ipAddress: '154.123.45.6', location: 'Tema, GH' }
+];
+
+// Mock Login Logs
+let MOCK_LOGS: LoginLog[] = [
+    { id: 'log-1', userId: 'u1', userName: 'Buzzitech Admin', email: 'admin@buzzitech.com', ip: '192.168.1.1', location: 'Accra, GH', device: 'Chrome / Windows', timestamp: new Date().toISOString(), status: 'Success', riskScore: 'Low' },
+    { id: 'log-2', userId: 'u3', userName: 'John Doe', email: 'john@gmail.com', ip: '154.123.45.6', location: 'Tema, GH', device: 'Safari / iPhone', timestamp: new Date(Date.now() - 60000).toISOString(), status: 'Success', riskScore: 'Low' },
+    { id: 'log-3', userId: 'u2', userName: 'Kwame Osei', email: 'kwame@buzzitech.com', ip: '41.203.11.2', location: 'Lagos, NG', device: 'Firefox / Linux', timestamp: new Date(Date.now() - 12000000).toISOString(), status: 'Failed', riskScore: 'High' },
+];
+
+let MOCK_CHATS: ChatMessage[] = [
+    { id: 'c1', senderId: 'u3', senderName: 'John Doe', senderRole: 'customer', receiverId: 'admin', message: 'Hello, when is my tech arriving?', timestamp: new Date(Date.now() - 3600000).toISOString() },
+    { id: 'c2', senderId: 'u1', senderName: 'Admin', senderRole: 'admin', receiverId: 'u3', message: 'Hi John, Kwame is on his way. He should be there in 20 mins.', timestamp: new Date(Date.now() - 3500000).toISOString() }
+];
+
+let MOCK_MEETINGS: Meeting[] = [
+    { id: 'm1', title: 'Starlink Consultation', platform: 'Zoom', link: 'https://zoom.us/j/123456789', date: '2023-12-01', time: '10:00', attendees: ['john@gmail.com'], status: 'Scheduled' }
+];
+
 export const api = {
   // --- PUBLIC FORMS ---
   submitContactForm: async (data: ContactFormData): Promise<{ success: boolean; message: string; ticketId?: string }> => {
-    // 1. Send to Formspree (Primary Collection)
-    await sendToFormspree(data, 'Contact Inquiry');
+    // If there's an attachment, simulated upload would happen here
+    const hasAttachment = data.attachment ? true : false;
+    const attachmentName = data.attachment ? data.attachment.name : '';
 
-    try {
-      const settings = getStoredSettings();
-      // If Ticketing, generate ID
-      const ticketId = data.service === 'Technical Support' ? `TKT-${Math.floor(100000 + Math.random() * 900000)}` : undefined;
-      
-      // Use configured N8N if available, else default
-      const webhookUrl = settings.n8nWebhook || N8N_QUOTE_WEBHOOK;
-      
-      // Attempt webhook
-      fetch(webhookUrl, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ ...data, ticketId, type: 'CONTACT_FORM' })
-      }).catch(e => console.log("Webhook skipped"));
+    await sendToExternal({ ...data, attachment: attachmentName }, 'Contact Inquiry');
+    const ticketId = data.service === 'Technical Support' ? `TKT-${Math.floor(100000 + Math.random() * 900000)}` : undefined;
+    
+    // Add to mock messages
+    MOCK_MESSAGES.unshift({
+        id: `msg-${Date.now()}`,
+        ticketId: ticketId,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        service: data.service,
+        message: data.message + (hasAttachment ? `\n[Attachment: ${attachmentName}]` : ''),
+        date: new Date().toISOString(),
+        status: 'Open',
+        replies: []
+    });
 
-      // Try Backend (might fail if offline, but Formspree handles the data collection)
-      try {
-        await request('forms/contact', 'POST', { ...data, ticketId });
-      } catch (backendError) {
-        console.log("Backend offline, relying on Formspree");
-      }
-
-      return { success: true, message: "Message Sent Successfully", ticketId };
-    } catch (e) {
-      const ticketId = data.service === 'Technical Support' ? `TKT-${Math.floor(100000 + Math.random() * 900000)}` : undefined;
-      return { success: true, message: "Sent (Formspree Mode)", ticketId };
-    }
+    return { success: true, message: "Message Sent Successfully", ticketId };
   },
 
   submitLead: async (contact: string): Promise<{ success: boolean }> => {
-    // Send quick leads to Formspree too
-    await sendToFormspree({ contact, type: 'Quick Lead' }, 'Lead Generation');
+    const settings = getStoredSettings();
+    // Use specific callback webhook if configured, else fallback
+    const url = settings.n8nCallbackWebhook || settings.n8nWebhook || DEFAULT_FORMSPREE_URL;
+    
     try {
-      console.log("Lead captured:", contact);
-      // Simulate API call
-      return { success: true };
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contact, type: 'Quick Lead', timestamp: new Date().toISOString() })
+        });
     } catch (e) {
-      return { success: true };
+        console.warn("Callback webhook error", e);
     }
+    return { success: true };
   },
 
   bookAppointment: async (data: AppointmentFormData): Promise<{ success: boolean; message: string }> => {
-    // 1. Send to Formspree (Primary Collection)
-    await sendToFormspree(data, 'Appointment Booking');
-
-    try {
-      try {
-        await request('forms/booking', 'POST', data);
-      } catch (backendError) {
-        console.log("Backend offline, relying on Formspree");
-      }
-      return { success: true, message: "Booking Request Sent" };
-    } catch (e) {
-      return { success: true, message: "Booked (Formspree Mode)" };
-    }
+    await sendToExternal(data, 'Appointment Booking');
+    // Add to mock bookings for demo purposes
+    MOCK_BOOKINGS.unshift({
+        id: `bk-${Date.now()}`,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        serviceType: data.serviceType,
+        date: data.date,
+        time: data.time,
+        status: 'Pending',
+        technician: null,
+        taskStatus: 'Unassigned',
+        rating: null,
+        workDone: undefined,
+        customerFeedback: undefined
+    });
+    return { success: true, message: "Booking Request Sent" };
   },
 
-  // --- ADMIN AUTH ---
+  // --- AUTHENTICATION ---
+  
   login: async (email: string, password: string) => {
-    try {
-      return await request('auth/login', 'POST', { email, password });
-    } catch (error) {
-      // Fallback for Offline Demo
-      if (email === 'admin@buzzitech.com' && password === 'password123') {
-        return {
-          success: true,
-          token: 'mock-admin-token-' + Date.now(),
-          name: 'Buzzitech Admin',
-          email: email
-        };
-      }
-      throw new Error('Invalid credentials or Server Offline');
+    if (email === 'admin@buzzitech.com' && password === 'password123') {
+      // Log the login
+      MOCK_LOGS.unshift({
+          id: `log-${Date.now()}`, userId: 'u1', userName: 'Admin', email, ip: '127.0.0.1', location: 'Localhost', device: 'Web', timestamp: new Date().toISOString(), status: 'Success', riskScore: 'Low'
+      });
+      return { success: true, token: 'mock-admin-token', name: 'Buzzitech Admin', email };
     }
+    throw new Error('Invalid credentials');
+  },
+
+  register: async (data: any) => {
+      const newUser: User = { 
+          id: `u-${Date.now()}`,
+          name: data.name,
+          email: data.email,
+          role: 'customer',
+          status: 'Active',
+          phone: data.phone,
+          password: data.password, // In real app, hash this
+          isOnline: true,
+          lastLogin: new Date().toISOString()
+      };
+      MOCK_USERS.push(newUser);
+      
+      return { 
+          success: true, 
+          user: newUser,
+          token: 'mock-cust-token'
+      };
+  },
+
+  customerLogin: async (email: string, phone: string) => {
+    const existingUser = MOCK_USERS.find(u => u.email === email && u.role === 'customer');
+    if (existingUser) {
+        existingUser.isOnline = true;
+        existingUser.lastLogin = new Date().toISOString();
+        return { success: true, user: existingUser, token: 'mock-cust-token' };
+    }
+    // Fallback logic for legacy/demo
+    const orderUser = MOCK_ORDERS.find(o => o.customer.email === email);
+    if (orderUser || (email && phone)) {
+       const newUser: User = { 
+           id: 'cust-' + Date.now(),
+           name: orderUser ? orderUser.customer.name : 'Valued Customer',
+           email: email,
+           role: 'customer',
+           status: 'Active',
+           isOnline: true,
+           lastLogin: new Date().toISOString()
+       };
+       MOCK_USERS.push(newUser);
+       return { success: true, user: newUser, token: 'mock-cust-token' };
+    }
+    return { success: true, user: { id: 'cust-new', name: 'New User', email, role: 'customer', status: 'Active' }, token: 'mock-cust-token' };
+  },
+
+  technicianLogin: async (email: string, password: string) => {
+    const tech = MOCK_TECHNICIANS.find(t => t.email === email);
+    if (tech && password === 'tech123') {
+       return { success: true, user: { ...tech, role: 'technician' }, token: 'mock-tech-token' };
+    }
+    throw new Error('Invalid Technician Credentials');
+  },
+
+  // Password Reset Mocks
+  requestPasswordReset: async (email: string) => {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // In production, check if email exists and send token
+      return { success: true, message: "Verification code sent to email." };
+  },
+
+  resetPassword: async (email: string, newPassword: string) => {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Update local mock user if exists
+      const user = MOCK_USERS.find(u => u.email === email);
+      if (user) {
+          // In real app, perform hash and update DB
+          console.log(`Password updated for ${email}`);
+      }
+      return { success: true, message: "Password updated successfully." };
+  },
+
+  // --- USER MANAGEMENT & LOGS ---
+  getUsers: async () => MOCK_USERS,
+  
+  createUser: async (userData: Partial<User>) => {
+      const newUser = { 
+          ...userData, 
+          id: `u-${Date.now()}`, 
+          status: 'Active',
+          isOnline: false,
+          lastLogin: 'Never'
+      } as User;
+      MOCK_USERS.push(newUser);
+      return { success: true, user: newUser };
+  },
+
+  updateUserRole: async (userId: string, role: string) => {
+      MOCK_USERS = MOCK_USERS.map(u => u.id === userId ? { ...u, role: role as any } : u);
+      return { success: true };
+  },
+
+  getLoginLogs: async (token: string) => MOCK_LOGS,
+
+  // --- COMMUNICATION & CHAT ---
+  
+  getChatMessages: async () => MOCK_CHATS,
+  
+  sendInternalMessage: async (senderId: string, senderName: string, message: string, receiverId?: string, senderRole: any = 'admin') => {
+      const newMsg: ChatMessage = {
+          id: `c-${Date.now()}`,
+          senderId,
+          senderName,
+          senderRole,
+          receiverId,
+          message,
+          timestamp: new Date().toISOString()
+      };
+      MOCK_CHATS.push(newMsg);
+      return { success: true, message: newMsg };
+  },
+
+  sendBulkMessage: async (type: 'email' | 'sms', recipients: string[], message: string, subject?: string) => {
+      // Mock sending
+      console.log(`Sending ${type} to ${recipients.length} recipients. Content: ${message}`);
+      return { success: true, count: recipients.length };
+  },
+
+  getMeetings: async () => MOCK_MEETINGS,
+
+  scheduleMeeting: async (meetingData: Partial<Meeting>) => {
+      const link = meetingData.platform === 'Zoom' 
+        ? `https://zoom.us/j/${Math.floor(100000000 + Math.random() * 900000000)}?pwd=samplepassword` 
+        : `https://teams.microsoft.com/l/meetup-join/19%3ameeting_${Math.random().toString(36).substring(7)}%40thread.v2/0?context=%7b%22Tid%22%3a%22example%22%7d`;
+      
+      const newMeeting: Meeting = {
+          id: `m-${Date.now()}`,
+          title: meetingData.title || 'Support Meeting',
+          platform: meetingData.platform || 'Zoom',
+          link: link,
+          date: meetingData.date || new Date().toISOString().split('T')[0],
+          time: meetingData.time || '10:00',
+          attendees: meetingData.attendees || [],
+          status: 'Scheduled'
+      };
+      MOCK_MEETINGS.push(newMeeting);
+      return { success: true, meeting: newMeeting };
+  },
+
+  // --- KNOWLEDGE BASE MANAGEMENT ---
+  
+  getKnowledgeBase: async (token: string) => MOCK_KNOWLEDGE_BASE,
+
+  addKnowledgeEntry: async (entry: Partial<KnowledgeEntry>, token: string) => {
+      const newEntry: KnowledgeEntry = {
+          id: `kb-${Date.now()}`,
+          category: entry.category || 'general',
+          keywords: entry.keywords || [],
+          answer: entry.answer || '',
+          action: entry.action
+      };
+      MOCK_KNOWLEDGE_BASE.push(newEntry);
+      return { success: true, entry: newEntry };
+  },
+
+  updateKnowledgeEntry: async (id: string, entry: Partial<KnowledgeEntry>, token: string) => {
+      MOCK_KNOWLEDGE_BASE = MOCK_KNOWLEDGE_BASE.map(e => e.id === id ? { ...e, ...entry } : e);
+      return { success: true };
+  },
+
+  deleteKnowledgeEntry: async (id: string, token: string) => {
+      MOCK_KNOWLEDGE_BASE = MOCK_KNOWLEDGE_BASE.filter(e => e.id !== id);
+      return { success: true };
+  },
+
+  uploadKnowledgeBase: async (file: File, token: string) => {
+      return new Promise<{ success: boolean; count: number }>((resolve, reject) => {
+          const extension = file.name.split('.').pop()?.toLowerCase();
+          
+          if (extension === 'json') {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  try {
+                      const content = e.target?.result as string;
+                      const data = JSON.parse(content);
+                      if (Array.isArray(data)) {
+                          const newEntries: KnowledgeEntry[] = data.map((item: any, idx: number) => ({
+                              id: item.id || `kb-imp-${Date.now()}-${idx}`,
+                              category: item.category || 'general',
+                              keywords: Array.isArray(item.keywords) ? item.keywords : [],
+                              answer: item.answer || '',
+                              action: item.action
+                          }));
+                          MOCK_KNOWLEDGE_BASE = [...MOCK_KNOWLEDGE_BASE, ...newEntries];
+                          resolve({ success: true, count: newEntries.length });
+                      } else {
+                          reject(new Error("Invalid JSON format. Expected an array."));
+                      }
+                  } catch (err) {
+                      reject(new Error("Failed to parse JSON file."));
+                  }
+              };
+              reader.readAsText(file);
+          } else if (extension === 'pdf' || extension === 'docx') {
+              // Simulate parsing for non-JSON files (Mocking OCR/Text Extraction)
+              setTimeout(() => {
+                  const simulatedEntry: KnowledgeEntry = {
+                      id: `kb-doc-${Date.now()}`,
+                      category: 'document-upload',
+                      keywords: [file.name.replace(/\.[^/.]+$/, "")], // Use filename as keyword
+                      answer: `Content extracted from ${file.name}: [Simulated Extraction]`,
+                  };
+                  MOCK_KNOWLEDGE_BASE.push(simulatedEntry);
+                  resolve({ success: true, count: 1 });
+              }, 1000);
+          } else {
+              reject(new Error("Unsupported file type."));
+          }
+      });
+  },
+
+  // --- DASHBOARD DATA ---
+
+  getCustomerOrders: async (email: string) => {
+     return MOCK_ORDERS.filter(o => o.customer.email === email);
+  },
+
+  getCustomerTickets: async (email: string) => {
+     return MOCK_MESSAGES.filter(m => m.email === email);
+  },
+
+  submitRating: async (technicianName: string, rating: number, feedback: string) => {
+     const tech = MOCK_TECHNICIANS.find(t => t.name === technicianName);
+     if (tech) {
+        tech.rating = ((tech.rating * 5) + rating) / 6; 
+        tech.feedback = feedback;
+        tech.reviews?.push({ customer: 'Current User', rating, comment: feedback, date: new Date().toISOString().split('T')[0] });
+     }
+     return { success: true };
+  },
+
+  getTechnicianTasks: async (techName: string) => {
+     const techBookings = MOCK_BOOKINGS.filter(b => b.technician === techName).map(b => ({
+         id: b.id,
+         type: b.serviceType,
+         client: b.name,
+         address: 'See Details', 
+         date: b.date,
+         time: b.time,
+         status: b.status
+     }));
+     
+     if (techBookings.length === 0) {
+         return [
+            { id: 'TSK-1', type: 'Installation', client: 'John Doe', address: 'East Legon', date: '2023-11-28', time: '10:00 AM', status: 'Pending' },
+            { id: 'TSK-2', type: 'Repair', client: 'Alice Smith', address: 'Osu', date: '2023-11-29', time: '2:00 PM', status: 'Scheduled' }
+         ];
+     }
+     return techBookings;
   },
 
   // --- ADMIN DATA ---
   
-  // 1. STATS & VISITS
   getAdminStats: async (token: string) => {
-    try {
-      return await request('stats', 'GET', undefined, token);
-    } catch (error) {
-       // Mock Data
        return {
          totalVisits: 12450,
          monthlyVisits: 3200,
          totalRevenue: 45200,
-         activeOrders: 5,
-         pendingQuotes: 3,
-         openTickets: 4
+         activeOrders: MOCK_ORDERS.length,
+         pendingQuotes: MOCK_QUOTES.length,
+         openTickets: MOCK_MESSAGES.filter(m => m.status === 'Open').length,
+         activeCustomers: MOCK_USERS.filter(u => u.isOnline).length,
+         remoteSessions: 2
        };
-    }
   },
 
-  // 2. ORDERS MANAGEMENT
-  getAdminOrders: async (token: string) => {
-    try {
-      return await request('orders', 'GET', undefined, token);
-    } catch (error) {
-      return MOCK_ORDERS;
-    }
-  },
+  getAdminOrders: async (token: string) => MOCK_ORDERS,
 
   updateOrderStatus: async (orderId: string, status: string, token: string) => {
-    try {
-      // Mock update
       MOCK_ORDERS = MOCK_ORDERS.map(o => o.orderId === orderId ? { ...o, status } : o);
-      return await request(`orders/${orderId}/status`, 'PUT', { status }, token);
-    } catch (error) {
-      // Fallback update
       return { success: true, message: "Status updated locally" };
-    }
   },
 
-  // 3. TRACKING (PUBLIC)
   trackOrder: async (orderId: string) => {
-    try {
-      // Check real backend first
-      return await request(`orders/track/${orderId}`, 'GET');
-    } catch (error) {
-      // Mock search
       const order = MOCK_ORDERS.find(o => o.orderId.toLowerCase() === orderId.toLowerCase());
       if (order) return order;
       throw new Error("Order not found");
-    }
   },
 
-  // 4. TECHNICIAN MANAGEMENT
-  getTechnicians: async (token: string) => {
-    // In a real app, fetch from DB
-    return MOCK_TECHNICIANS;
-  },
+  getTechnicians: async (token: string) => MOCK_TECHNICIANS,
 
   addTechnician: async (techData: Partial<Technician>, token: string) => {
     const newTech: Technician = {
         id: `t-${Date.now()}`,
         name: techData.name || 'New Tech',
         role: techData.role || 'General Staff',
+        department: techData.department || 'General',
+        email: techData.email || '',
         rating: techData.rating || 5,
         feedback: techData.feedback || 'No records yet.',
-        status: 'Active'
+        status: 'Active',
+        reviews: [],
+        jobsCompleted: 0
     };
     MOCK_TECHNICIANS.push(newTech);
     return { success: true, technicians: MOCK_TECHNICIANS };
   },
 
-  // 5. BOOKINGS & TASKS & RATINGS
   getAdminBookings: async (token: string) => {
-    try {
-      return await request('bookings', 'GET', undefined, token);
-    } catch (error) {
-      return [
-        {
-           id: 'bk-1',
-           name: 'John Doe',
-           email: 'john@gmail.com',
-           phone: '0558493021',
-           serviceType: 'Starlink Setup',
-           date: '2023-11-20',
-           time: '14:00',
-           status: 'Completed',
-           technician: 'Kwame Osei', 
-           taskStatus: 'Done',
-           rating: 5,
-           workDone: 'Mounted dish on roof, routed cable through attic, set up router. Speed test: 150Mbps.',
-           customerFeedback: 'Excellent service, very neat work.'
-        },
-        {
-           id: 'bk-2',
-           name: 'Anita Ofori',
-           email: 'anita@yahoo.com',
-           phone: '0204938271',
-           serviceType: 'CCTV Survey',
-           date: '2023-11-22',
-           time: '10:00',
-           status: 'Pending',
-           technician: null,
-           taskStatus: 'Unassigned',
-           rating: null
-        }
-      ];
-    }
+      return MOCK_BOOKINGS;
+  },
+
+  createAdminBooking: async (data: any, token: string) => {
+      const newBooking = {
+          id: `bk-man-${Date.now()}`,
+          name: data.name,
+          email: data.email || 'N/A',
+          phone: data.phone,
+          serviceType: data.serviceType,
+          date: data.date,
+          time: data.time,
+          status: 'Pending',
+          technician: data.technician || null,
+          taskStatus: 'Assigned',
+          rating: null,
+          workDone: undefined,
+          customerFeedback: undefined
+      };
+      MOCK_BOOKINGS.unshift(newBooking);
+      return { success: true, booking: newBooking };
   },
 
   assignTechnician: async (bookingId: string, technicianName: string, token: string) => {
-      console.log(`Assigning ${technicianName} to booking ${bookingId}`);
+      MOCK_BOOKINGS = MOCK_BOOKINGS.map(b => b.id === bookingId ? { ...b, technician: technicianName } : b);
       return { success: true };
   },
 
-  // 6. MESSAGES & TICKETS
   getAdminMessages: async (token: string) => {
-    try {
-      return await request('messages', 'GET', undefined, token);
-    } catch (error) {
-      return [
-        {
-          id: 'msg-1',
-          ticketId: 'TKT-829301',
-          name: 'David Boateng',
-          email: 'david.b@company.com',
-          phone: '0244000000',
-          service: 'Technical Support',
-          message: 'We need structured cabling for our new office block in Tema.',
-          date: new Date(Date.now() - 10000000).toISOString(),
-          status: 'Open',
-          replies: []
-        },
-        {
-          id: 'msg-2',
-          name: 'Grace Appiah',
-          email: 'grace@gmail.com',
-          phone: '0500000000',
-          service: 'General Inquiry',
-          message: 'Do you sell laptop batteries for HP Elitebook?',
-          date: new Date(Date.now() - 50000000).toISOString(),
-          status: 'Resolved',
-          replies: [{ sender: 'Admin', text: 'Yes, we have them in stock.', date: new Date().toISOString() }]
-        }
-      ];
-    }
+      return MOCK_MESSAGES;
   },
 
   replyToMessage: async (messageId: string, replyText: string, token: string) => {
-      console.log(`Replying to ticket ${messageId}: ${replyText}`);
+      MOCK_MESSAGES = MOCK_MESSAGES.map(m => 
+          m.id === messageId 
+          ? { ...m, status: 'Responded', replies: [...m.replies, { sender: 'Admin', text: replyText, date: new Date().toISOString() }] }
+          : m
+      );
       return { success: true };
   },
 
-  // 7. QUOTES
   getAdminQuotes: async (token: string) => {
-    try {
-      return await request('quotes', 'GET', undefined, token);
-    } catch (error) {
-      return [
-        {
-          id: 'qt-1',
-          name: 'TechHub Ghana',
-          email: 'procurement@techhub.com',
-          phone: '0302999999',
-          serviceType: 'CCTV Security',
-          grandTotal: 15400,
-          description: '16 Channel Installation with 4K Cameras',
-          date: new Date().toISOString()
-        }
-      ];
-    }
+      return MOCK_QUOTES;
   },
 
-  // 8. INVENTORY
-  getAdminProducts: async (token: string) => {
-    try {
-      return await request('products', 'GET', undefined, token);
-    } catch (error) {
-      return PRODUCTS; 
-    }
-  },
+  getAdminProducts: async (token: string) => PRODUCTS,
 
-  // Public fetch for store
-  getProducts: async () => {
-    try {
-       return await request('products', 'GET');
-    } catch (e) {
-       return PRODUCTS;
-    }
-  },
-
-  updateProductStock: async (id: string, stock: number, token: string) => {
-    try {
-      return await request(`products/${id}`, 'PUT', { stock }, token);
-    } catch (e) {
-      return { success: true };
-    }
-  },
+  getProducts: async () => PRODUCTS,
 
   updateProductDetails: async (product: Product, token: string) => {
+      // In real app, update DB. Here, we update local memory if using MOCK, but PRODUCTS is imported constant.
+      // We will pretend for UI interaction.
       console.log("Updating product:", product);
       return { success: true };
   },
 
   addProduct: async (product: Product, token: string) => {
       console.log("Creating new product:", product);
-      // In a real app, this posts to the backend
       return { success: true, product };
   },
 
@@ -436,8 +647,7 @@ export const api = {
       const formData = new FormData();
       formData.append('image', file);
 
-      // We use plain fetch here because headers content-type multipart/form-data
-      // is automatically set by browser with boundary when using FormData
+      // Try backend first
       const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         body: formData,
@@ -446,25 +656,41 @@ export const api = {
       if(!response.ok) throw new Error("Upload failed");
       
       const data = await response.json();
-      
-      // If backend returns partial path, prepend URL base
-      // NOTE: In production, ensure this points to the right static server
       return data.image.startsWith('http') ? data.image : `${(import.meta as any).env?.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${data.image}`;
     } catch (e) {
-      console.error("Upload error", e);
-      // Fallback for demo
-      return URL.createObjectURL(file);
+      console.warn("Backend upload failed, falling back to local base64 storage.");
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+      });
     }
   },
 
   // 9. SITE SETTINGS & CONFIGURATION
+  getSiteImages: async () => {
+      const saved = localStorage.getItem('buzzitech_site_images');
+      return saved ? JSON.parse(saved) : {
+         hero_bg: "https://images.unsplash.com/photo-1551703606-2ad43d5b24c0",
+         about_img: "https://images.unsplash.com/photo-1581092160562-40aa08e78837",
+         cctv_banner: "https://images.unsplash.com/photo-1599256872237-5dcc0fbe9668",
+         tracking_hero: "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1974&q=80",
+         slide_1: "https://images.unsplash.com/photo-1551703606-2ad43d5b24c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+         slide_2: "https://images.unsplash.com/photo-1599256872237-5dcc0fbe9668?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+         slide_3: "https://images.unsplash.com/photo-1544652478-6653e09f1826?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+         slide_4: "https://images.unsplash.com/photo-1621905251189-08b95d6c2a81?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+         slide_5: "https://images.unsplash.com/photo-1556742031-c6961e8560b0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2060&q=80"
+      };
+  },
+
   updateSiteImages: async (images: any, token: string) => {
       console.log("Updating site images:", images);
+      localStorage.setItem('buzzitech_site_images', JSON.stringify(images));
       return { success: true };
   },
 
   saveSettings: async (settings: any, token: string) => {
-      console.log("Saving System Settings:", settings);
       localStorage.setItem('buzzitech_settings', JSON.stringify(settings));
       return { success: true };
   },
@@ -475,48 +701,8 @@ export const api = {
 
   // --- E-COMMERCE PAYMENT PROCESSING ---
   processPayment: async (order: Order): Promise<{ success: boolean; transactionId: string }> => {
-    const settings = getStoredSettings();
-    const paystackKey = settings.paystackPublicKey;
-    
-    if (order.paymentMethod === 'paystack' && paystackKey) {
-        console.log("Initializing Paystack with key:", paystackKey);
-        // Real Paystack integration would happen here or redirect
-    }
-
-    // 1. Send to Node.js Backend
-    try {
-      await request('orders', 'POST', {
-        id: order.id,
-        items: order.items,
-        total: order.total,
-        customer: order.customer,
-        deliveryMode: order.deliveryMode,
-        paymentMethod: order.paymentMethod,
-        installationType: order.installationType,
-        installationCost: order.installationCost
-      });
-    } catch (err) {
-      console.error("Backend Order Sync Failed:", err);
-    }
-
-    // 2. Send Order to Supabase
-    try {
-      let productSummary = order.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
-      await supabase.from('orders').insert({
-          order_id: order.id,
-          full_name: order.customer.name,
-          email: order.customer.email,
-          total_amount: order.total,
-          status: order.status,
-          created_at: new Date().toISOString()
-        });
-    } catch (err) {
-      console.error("Supabase Connection Failed:", err);
-    }
-
     // Update mock orders for demo
     MOCK_ORDERS.unshift({
-        _id: 'new-' + Date.now(),
         orderId: order.id,
         customer: order.customer,
         total: order.total,
@@ -530,123 +716,53 @@ export const api = {
     return { success: true, transactionId: order.id };
   },
 
-  // --- QUOTES ---
   requestQuotation: async (data: QuoteFormData): Promise<{ success: boolean; message: string; data?: any }> => {
-    // Send to Formspree as well
-    await sendToFormspree(data, 'Quote Request');
-
+    const settings = getStoredSettings();
+    // Use specific quote webhook if configured, else generic form webhook, else default constant
+    const url = settings.n8nQuoteWebhook || settings.n8nWebhook || N8N_QUOTE_WEBHOOK;
+    
+    // Attempt real fetch to the configured webhook
     try {
-      // Log to backend
-      request('forms/quote', 'POST', data);
-    } catch(e) {}
-
-    // Send to N8N
-    try {
-      const settings = getStoredSettings();
-      const webhook = settings.n8nWebhook || N8N_QUOTE_WEBHOOK;
-
-      const response = await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-             ...data,
-             quote_generated: true,
-             invoice_requested: true
-        })
-      });
-
-      if (!response.ok) throw new Error("Webhook failed");
-      const resultData = await response.json();
-      
-      return { 
-        success: true, 
-        message: "Quote generated and sent to processing.", 
-        data: resultData 
-      };
-    } catch (error) {
-      return { success: true, message: "Local quote generated (Offline Mode)." }; 
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) console.warn("Webhook submission failed:", res.statusText);
+    } catch(e) {
+        console.warn("Webhook network error", e);
     }
+
+    // SYNC TO ADMIN PORTAL (MOCK)
+    MOCK_QUOTES.unshift({
+        ...data,
+        date: new Date().toISOString()
+    });
+
+    return { success: true, message: "Quote request processed." }; 
   },
 
   submitFeedback: async (feedbackData: { name: string, email: string, message: string }): Promise<void> => {
-    await sendToFormspree(feedbackData, 'Customer Feedback');
-    try {
-      const settings = getStoredSettings();
-      const webhook = settings.n8nWebhook || N8N_QUOTE_WEBHOOK;
-      
-      await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...feedbackData, customer_feedback: true })
-      });
-    } catch (error) {
-      console.warn("Feedback submission failed", error);
-    }
+    await sendToExternal(feedbackData, 'Customer Feedback');
   },
 
-  // --- CHATBOT ---
   sendChatMessage: async (message: string): Promise<{ text: string, action?: string }> => {
-    const settings = getStoredSettings();
-    const chatWebhook = settings.n8nChatWebhook || N8N_CHAT_WEBHOOK_URL;
-
+    // Chatbot logic (mock)
     const lowerMsg = message.toLowerCase().trim();
-
-    if (lowerMsg.includes('call me') || lowerMsg.includes('speak to human') || lowerMsg.includes('agent')) {
-       return { 
-           text: "I can have our AI Voice Assistant call you immediately. Please enter your phone number.",
-           action: 'request_phone'
-       };
-    }
-
+    if (lowerMsg.includes('call me')) return { text: "I can have our AI Voice Assistant call you immediately. Please enter your phone number.", action: 'request_phone' };
+    
     let bestMatch = null;
     let highestScore = 0;
-
-    KNOWLEDGE_BASE.forEach(entry => {
+    
+    MOCK_KNOWLEDGE_BASE.forEach(entry => {
       let score = 0;
       entry.keywords.forEach(keyword => {
-        if (lowerMsg.includes(keyword.toLowerCase())) {
-          score += 1 + (keyword.length * 0.1);
-          if (lowerMsg === keyword.toLowerCase() || lowerMsg.includes(`about ${keyword.toLowerCase()}`)) {
-             score += 10;
-          }
-        }
+        if (lowerMsg.includes(keyword.toLowerCase())) score += 1 + (keyword.length * 0.1);
       });
-
-      if (score > highestScore) {
-        highestScore = score;
-        bestMatch = entry;
-      }
+      if (score > highestScore) { highestScore = score; bestMatch = entry; }
     });
 
-    if (bestMatch && highestScore >= 1.0) {
-      return { text: bestMatch.answer, action: bestMatch.action }; 
-    }
-
-    if (chatWebhook && !chatWebhook.includes('your-n8n-instance')) {
-        try {
-            const response = await fetch(chatWebhook, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    chatInput: message,
-                    sessionId: localStorage.getItem('chat_session_id') || `session-${Date.now()}`
-                })
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.output || data.text) {
-                    return { 
-                        text: data.output || data.text,
-                        action: data.action
-                    };
-                }
-            }
-        } catch (error) {
-            console.warn("N8N Agent unreachable or offline.", error);
-        }
-    }
-
+    if (bestMatch && highestScore >= 1.0) return { text: bestMatch.answer, action: bestMatch.action }; 
     return { text: FALLBACK_ANSWER };
   }
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Package, Truck, CheckCircle, Clock, MapPin, AlertCircle, Phone, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
@@ -9,6 +9,16 @@ const OrderTracking: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [orderData, setOrderData] = useState<any>(null);
   const [error, setError] = useState('');
+  const [heroImage, setHeroImage] = useState("https://images.unsplash.com/photo-1580674684081-7617fbf3d745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1974&q=80");
+
+  useEffect(() => {
+    // Load dynamic image from settings if available
+    api.getSiteImages().then(images => {
+        if (images && images.tracking_hero) {
+            setHeroImage(images.tracking_hero);
+        }
+    });
+  }, []);
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,9 +62,15 @@ const OrderTracking: React.FC = () => {
         <div className="absolute inset-0 z-0">
            {/* High-quality Delivery Van/Person Image */}
            <img 
-             src="https://images.unsplash.com/photo-1580674684081-7617fbf3d745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1974&q=80" 
+             src={heroImage}
              alt="Buzzitech Delivery Service" 
              className="w-full h-full object-cover opacity-50"
+             onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (target.src !== "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1974&q=80") {
+                    target.src = "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1974&q=80";
+                }
+             }}
            />
            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
         </div>

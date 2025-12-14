@@ -11,10 +11,38 @@ const Home: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [leadContact, setLeadContact] = useState("");
   const [leadSent, setLeadSent] = useState(false);
+  const [slideImages, setSlideImages] = useState<string[]>([
+      "https://images.unsplash.com/photo-1551703606-2ad43d5b24c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      "https://images.unsplash.com/photo-1599256872237-5dcc0fbe9668?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      "https://images.unsplash.com/photo-1544652478-6653e09f1826?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      "https://images.unsplash.com/photo-1621905251189-08b95d6c2a81?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      "https://images.unsplash.com/photo-1556742031-c6961e8560b0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2060&q=80"
+  ]);
+
+  useEffect(() => {
+      api.getSiteImages().then(images => {
+          if (images) {
+              const newSlides = [...slideImages];
+              if (images.slide_1) newSlides[0] = images.slide_1;
+              if (images.slide_2) newSlides[1] = images.slide_2;
+              if (images.slide_3) newSlides[2] = images.slide_3;
+              if (images.slide_4) newSlides[3] = images.slide_4;
+              if (images.slide_5) newSlides[4] = images.slide_5;
+              setSlideImages(newSlides);
+          }
+      });
+  }, []);
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!leadContact) return;
+    
+    // Strict phone number validation (digits only, min 9 chars)
+    const phoneRegex = /^[0-9\-\+\s]{9,}$/;
+    if (!phoneRegex.test(leadContact)) {
+        alert("Please enter a valid phone number.");
+        return;
+    }
+
     await api.submitLead(leadContact);
     setLeadSent(true);
     setTimeout(() => setLeadSent(false), 3000);
@@ -25,8 +53,7 @@ const Home: React.FC = () => {
   const slides = [
     {
       id: 1,
-      // Professional Network Engineer working on Server Rack
-      image: "https://images.unsplash.com/photo-1551703606-2ad43d5b24c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      image: slideImages[0],
       title: "Network Engineering",
       subtitle: "Enterprise Structured Cabling & Server Racks",
       icon: Network,
@@ -34,8 +61,7 @@ const Home: React.FC = () => {
     },
     {
       id: 2,
-      // Modern CCTV Camera on building
-      image: "https://images.unsplash.com/photo-1599256872237-5dcc0fbe9668?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      image: slideImages[1],
       title: "CCTV Security Systems",
       subtitle: "Advanced Surveillance & Remote Monitoring",
       icon: Video,
@@ -43,8 +69,7 @@ const Home: React.FC = () => {
     },
     {
       id: 3,
-      // Satellite Dish / Communications
-      image: "https://images.unsplash.com/photo-1544652478-6653e09f1826?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      image: slideImages[2],
       title: "Starlink Setup",
       subtitle: "High-Speed Satellite Internet Installation",
       icon: Satellite,
@@ -52,8 +77,7 @@ const Home: React.FC = () => {
     },
     {
       id: 4,
-      // Modern WiFi Router / Access Point equipment
-      image: "https://images.unsplash.com/photo-1621905251189-08b95d6c2a81?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      image: slideImages[3],
       title: "Hotspot WiFi Deployment",
       subtitle: "Long-Range Connectivity Solutions",
       icon: Wifi,
@@ -61,8 +85,7 @@ const Home: React.FC = () => {
     },
     {
       id: 5,
-      // Point of Sale Transaction
-      image: "https://images.unsplash.com/photo-1556742031-c6961e8560b0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2060&q=80",
+      image: slideImages[4],
       title: "POS & Digital Solutions",
       subtitle: "Point of Sale, Web Design & Cloud Computing",
       icon: ShoppingCart,
@@ -315,7 +338,7 @@ const Home: React.FC = () => {
           {/* Quick Lead Generation Form */}
           <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
              <h4 className="text-lg font-bold text-slate-900 mb-2">Request a Quick Callback</h4>
-             <p className="text-sm text-slate-500 mb-4">Enter your number or email, and we'll call you ASAP.</p>
+             <p className="text-sm text-slate-500 mb-4">Enter your number, and we'll call you ASAP.</p>
              {leadSent ? (
                <div className="bg-green-50 text-green-700 p-3 rounded-lg flex items-center justify-center gap-2">
                  <CheckCircle size={18} /> Request Sent!
@@ -323,9 +346,10 @@ const Home: React.FC = () => {
              ) : (
                <form onSubmit={handleLeadSubmit} className="flex gap-2">
                  <input 
-                   type="text" 
+                   type="tel" 
                    required
-                   placeholder="Your Phone / Email" 
+                   pattern="[0-9\-\+\s]{9,}"
+                   placeholder="Your Phone Number" 
                    value={leadContact}
                    onChange={(e) => setLeadContact(e.target.value)}
                    className="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-900 bg-white"
