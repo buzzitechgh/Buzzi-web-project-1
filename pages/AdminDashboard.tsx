@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LogOut, ShoppingBag, Package, RefreshCw, LayoutDashboard, 
   Calendar, MessageSquare, FileText, TrendingUp, Users, DollarSign,
   Phone, Mail, Clock, CheckCircle, AlertCircle, Edit2, Image, Save, X, Ticket,
   Settings, CreditCard, Webhook, Server, Plus, Star, Link as LinkIcon, Upload, UserPlus, Truck, Monitor, Video, ShieldCheck, Trash2,
-  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight
+  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { api } from '../services/api';
@@ -34,10 +34,13 @@ const AdminDashboard: React.FC = () => {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeEntry[]>([]);
   
-  // Edit States
+  // Inventory / Product Edit States
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, stock: 0, category: 'General', description: '', image: 'https://via.placeholder.com/300', features: [] });
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({ 
+      name: '', price: 0, originalPrice: 0, stock: 0, brand: '', category: 'General', description: '', image: '', features: [] 
+  });
 
   // Chatbot Edit States
   const [isAddingKB, setIsAddingKB] = useState(false);
@@ -50,6 +53,11 @@ const AdminDashboard: React.FC = () => {
   const [internalMessage, setInternalMessage] = useState("");
   const [chatTarget, setChatTarget] = useState<User | null>(null); // For admin 1-on-1 chat
   
+  // Chat Interaction States
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojis = ["👍", "👋", "😊", "😂", "❤️", "🔥", "🎉", "✅", "❌", "🤔", "💻", "🔧"];
+
   const [isAddingMeeting, setIsAddingMeeting] = useState(false);
   const [newMeetingData, setNewMeetingData] = useState({ title: '', platform: 'Zoom', date: '', time: '', attendees: '' });
   const [remoteId, setRemoteId] = useState("");
@@ -63,17 +71,17 @@ const AdminDashboard: React.FC = () => {
 
   // User Management States
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
   const [newUserData, setNewUserData] = useState({ name: '', email: '', role: 'customer', password: '' });
 
   // Technician Edit State
   const [newTechData, setNewTechData] = useState<Partial<Technician>>({ name: '', email: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
   const [isAddingTech, setIsAddingTech] = useState(false);
-  const [assigningBookingId, setAssigningBookingId] = useState<string | null>(null);
-
-  // New Booking State
+  
+  // Ticket Management
+  const [bookingFilter, setBookingFilter] = useState('All');
   const [isAddingBooking, setIsAddingBooking] = useState(false);
   const [newBookingData, setNewBookingData] = useState({ name: '', phone: '', email: '', serviceType: '', date: '', time: '', technician: '' });
-  const [bookingFilter, setBookingFilter] = useState('All');
 
   // Admin Quote Generator State
   const [isCreatingQuote, setIsCreatingQuote] = useState(false);
@@ -86,6 +94,9 @@ const AdminDashboard: React.FC = () => {
   const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // Chat scroll ref
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // Settings State
   const [settings, setSettings] = useState({
       adminEmail: 'admin@buzzitech.com',
@@ -93,7 +104,8 @@ const AdminDashboard: React.FC = () => {
       n8nWebhook: '',
       n8nChatWebhook: '',
       n8nQuoteWebhook: '',
-      n8nCallbackWebhook: '', // Added callback webhook
+      n8nCallbackWebhook: '',
+      formspreeUrl: '',
       smsProvider: 'AfricaTalking',
       smsApiKey: '',
       smsSenderId: '',
@@ -119,6 +131,11 @@ const AdminDashboard: React.FC = () => {
   ];
 
   const TECH_ROLES = ["Network Engineer", "CCTV Specialist", "Software Support", "Field Technician", "System Administrator"];
+  const PRODUCT_CATEGORIES = ["Starlink", "Networking", "CCTV IP", "CCTV Analog", "Recorders", "Access Control", "Power", "Cables", "Accessories", "Office", "Computers"];
+
+  // --- STYLING CONSTANTS ---
+  const inputStyle = "w-full border border-gray-300 rounded-lg p-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none";
+  const labelStyle = "block text-xs font-bold text-slate-500 mb-1 uppercase";
 
   useEffect(() => {
     const storedToken = localStorage.getItem('adminToken');
@@ -139,8 +156,15 @@ const AdminDashboard: React.FC = () => {
       }
   }, [selectedImageKey, siteImages]);
 
+  // Scroll chat to bottom when messages update
+  useEffect(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [internalChats, chatTarget]);
+
   const fetchData = async (authToken: string) => {
     setLoading(true);
+    // Minimum delay for visual feedback
+    const delay = new Promise(resolve => setTimeout(resolve, 500));
     try {
       const [statsData, ordersData, bookingsData, messagesData, quotesData, productsData, settingsData, techsData, imagesData, usersData, chatsData, meetingsData, kbData, logsData] = await Promise.all([
         api.getAdminStats(authToken),
@@ -156,7 +180,8 @@ const AdminDashboard: React.FC = () => {
         api.getChatMessages(),
         api.getMeetings(),
         api.getKnowledgeBase(authToken),
-        api.getLoginLogs(authToken)
+        api.getLoginLogs(authToken),
+        delay
       ]);
       
       setStats(statsData);
@@ -197,11 +222,16 @@ const AdminDashboard: React.FC = () => {
 
   // --- ACTIONS ---
 
+  const handleUpdateBookingStatus = async (bookingId: string, newStatus: string) => {
+      // In a real app, you'd call an API. Mocking local update:
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+  };
+
   const handleAssignTechnician = async (bookingId: string, technician: string) => {
      try {
        await api.assignTechnician(bookingId, technician, token);
-       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, technician: technician === 'Unassigned' ? null : technician, taskStatus: 'Assigned', status: 'In Progress' } : b));
-       setAssigningBookingId(null);
+       // Update local state to reflect assignment immediately
+       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, technician: technician === 'Unassigned' ? null : technician, taskStatus: 'Assigned', status: b.status === 'Pending' ? 'In Progress' : b.status } : b));
      } catch (e) {
        alert("Failed to assign technician");
      }
@@ -367,14 +397,33 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
+  // --- CHAT ACTIONS ---
   const handleInternalChat = async () => {
       if (!internalMessage.trim() || !chatTarget) return;
       try {
           const result = await api.sendInternalMessage('admin', 'Admin', internalMessage, chatTarget.id, 'admin');
           setInternalChats(prev => [...prev, result.message]);
           setInternalMessage("");
+          setShowEmojiPicker(false);
       } catch (e) {
           alert("Failed to send message");
+      }
+  };
+
+  const handleEmojiClick = (emoji: string) => {
+      setInternalMessage(prev => prev + emoji);
+      setShowEmojiPicker(false);
+  };
+
+  const handleAttachClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setInternalMessage(prev => prev + ` [Attachment: ${file.name}] `);
+          e.target.value = ''; // Reset
       }
   };
 
@@ -383,8 +432,33 @@ const AdminDashboard: React.FC = () => {
           alert("Please enter a Session ID");
           return;
       }
-      const protocol = tool === 'anydesk' ? `anydesk:${remoteId}` : `teamviewer8://${remoteId}`;
-      window.location.href = protocol;
+      
+      const cleanId = remoteId.replace(/\s/g, ''); // Remove spaces
+      
+      // Attempt to launch application via custom protocol URI
+      let protocolUrl = '';
+      let fallbackUrl = '';
+
+      if (tool === 'anydesk') {
+          protocolUrl = `anydesk:${cleanId}`;
+          fallbackUrl = 'https://anydesk.com/en/downloads';
+      } else {
+          // TeamViewer protocol (standard is teamviewer10 or 8 usually)
+          protocolUrl = `teamviewer8://${cleanId}`; 
+          fallbackUrl = 'https://www.teamviewer.com/en/download/';
+      }
+      
+      // Try to open protocol
+      window.location.href = protocolUrl;
+
+      // Set a fallback timeout if the app doesn't open (user might not have it installed)
+      setTimeout(() => {
+         const confirmDownload = window.confirm(`It seems ${tool} didn't open. Do you want to download it?`);
+         if (confirmDownload) {
+             window.open(fallbackUrl, '_blank');
+         }
+      }, 1500);
+      
       setShowRemoteModal(false);
       setRemoteId("");
   };
@@ -416,7 +490,7 @@ const AdminDashboard: React.FC = () => {
           await api.addProduct(productToSave, token);
           setProducts(prev => [...prev, productToSave]);
           setIsAddingProduct(false);
-          setNewProduct({ name: '', price: 0, stock: 0, category: 'General', description: '', image: 'https://via.placeholder.com/300', features: [] });
+          setNewProduct({ name: '', price: 0, originalPrice: 0, stock: 0, brand: '', category: 'General', description: '', image: '', features: [] });
           alert("Product created successfully");
       } catch (e) {
           alert("Failed to create product");
@@ -440,6 +514,25 @@ const AdminDashboard: React.FC = () => {
           }
       } catch (error) {
           alert("Failed to upload image");
+      } finally {
+          setUploading(false);
+      }
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+      
+      setUploading(true);
+      try {
+          const url = await api.uploadImage(file);
+          if (isEdit && editingProduct) {
+              setEditingProduct({...editingProduct, image: url});
+          } else {
+              setNewProduct(prev => ({...prev, image: url}));
+          }
+      } catch(e) {
+          alert("Upload failed");
       } finally {
           setUploading(false);
       }
@@ -634,10 +727,11 @@ const AdminDashboard: React.FC = () => {
             </button>
             <button 
                 onClick={() => fetchData(token)} 
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50 shadow-sm transition-all"
+                disabled={loading}
+                className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-slate-600 shadow-sm transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-gray-50'}`}
             >
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 
-                <span className="hidden sm:inline">Refresh Data</span>
+                <span className="hidden sm:inline">{loading ? 'Refreshing...' : 'Refresh Data'}</span>
             </button>
           </div>
         </div>
@@ -715,7 +809,7 @@ const AdminDashboard: React.FC = () => {
                                         <td className="p-4 text-slate-500">{new Date(order.date).toLocaleDateString()}</td>
                                         <td className="p-4">
                                             <select 
-                                                className="border rounded p-1 text-xs bg-white text-slate-900" 
+                                                className="border border-gray-300 rounded p-1 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                                                 value={order.status}
                                                 onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)}
                                             >
@@ -760,7 +854,7 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* New Technician Modal - Updated Professional */}
+                    {/* Add Technician Modal */}
                     {isAddingTech && (
                         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
@@ -771,16 +865,16 @@ const AdminDashboard: React.FC = () => {
                                 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Full Name</label>
-                                        <input className="w-full border p-2.5 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none text-slate-900" 
+                                        <label className={labelStyle}>Full Name</label>
+                                        <input className={inputStyle} 
                                             placeholder="e.g., Kwame Osei" 
                                             value={newTechData.name} 
                                             onChange={e => setNewTechData({...newTechData, name: e.target.value})} 
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Email Address</label>
-                                        <input className="w-full border p-2.5 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none text-slate-900" 
+                                        <label className={labelStyle}>Email Address</label>
+                                        <input className={inputStyle} 
                                             placeholder="tech@buzzitech.com" 
                                             value={newTechData.email} 
                                             onChange={e => setNewTechData({...newTechData, email: e.target.value})} 
@@ -788,9 +882,9 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Role</label>
+                                            <label className={labelStyle}>Role</label>
                                             <select 
-                                                className="w-full border p-2.5 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none text-slate-900"
+                                                className={inputStyle}
                                                 value={newTechData.role}
                                                 onChange={e => setNewTechData({...newTechData, role: e.target.value})}
                                             >
@@ -798,8 +892,8 @@ const AdminDashboard: React.FC = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Department</label>
-                                            <input className="w-full border p-2.5 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none text-slate-900" 
+                                            <label className={labelStyle}>Department</label>
+                                            <input className={inputStyle} 
                                                 placeholder="e.g., Infrastructure" 
                                                 value={newTechData.department} 
                                                 onChange={e => setNewTechData({...newTechData, department: e.target.value})} 
@@ -815,69 +909,15 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Technician List */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-                        <div className="p-4 bg-gray-50 border-b border-gray-200 font-bold text-slate-700 flex justify-between items-center">
-                            <span>Active Technical Staff</span>
-                            <span className="text-xs font-normal text-slate-500">{technicians.length} Members</span>
-                        </div>
-                        <div className="divide-y divide-gray-100">
-                            {technicians.map(tech => (
-                                <div key={tech.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                                            {tech.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900">{tech.name}</h4>
-                                            <p className="text-xs text-slate-500">{tech.role} • {tech.department}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 text-sm">
-                                        <span className="flex items-center gap-1 text-yellow-600 font-bold"><Star size={14} fill="currentColor"/> {tech.rating}</span>
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${tech.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                            {tech.status}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Assign Technician Modal */}
-                    {assigningBookingId && (
-                        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
-                                <h3 className="font-bold text-lg mb-4 text-slate-900">Assign Ticket</h3>
-                                <p className="text-sm text-slate-500 mb-4">Select a technician for ticket: <span className="font-mono font-bold">{assigningBookingId}</span></p>
-                                <div className="space-y-2">
-                                    {technicians.map(tech => (
-                                        <button 
-                                            key={tech.id}
-                                            onClick={() => handleAssignTechnician(assigningBookingId, tech.name)}
-                                            className="w-full text-left p-3 border rounded-lg hover:bg-slate-50 flex justify-between items-center group"
-                                        >
-                                            <div>
-                                                <p className="font-bold text-slate-800">{tech.name}</p>
-                                                <p className="text-xs text-slate-500">{tech.role} • {tech.status}</p>
-                                            </div>
-                                            <div className="opacity-0 group-hover:opacity-100 text-primary-600 text-xs font-bold uppercase transition">Select</div>
-                                        </button>
-                                    ))}
-                                </div>
-                                <button onClick={() => setAssigningBookingId(null)} className="w-full mt-4 py-2 text-slate-500 hover:text-slate-800 text-sm">Cancel</button>
-                            </div>
-                        </div>
-                    )}
-
+                    {/* New Booking Form */}
                     {isAddingBooking && (
                         <div className="bg-slate-50 p-4 rounded-xl border mb-4 animate-in slide-in-from-top-2">
                             <h4 className="font-bold mb-3 text-sm text-slate-800">Create Support Ticket</h4>
                             <div className="grid grid-cols-2 gap-4 mb-4">
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Client Name" value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Service Type / Issue" value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
+                                <input className={inputStyle} placeholder="Client Name" value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} />
+                                <input className={inputStyle} placeholder="Service Type / Issue" value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} />
+                                <input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
+                                <input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
                             </div>
                             <Button onClick={handleCreateBooking} size="sm">Create Ticket</Button>
                         </div>
@@ -889,7 +929,6 @@ const AdminDashboard: React.FC = () => {
                                 <tr>
                                     <th className="p-4">Ticket ID</th>
                                     <th className="p-4">Subject & Client</th>
-                                    <th className="p-4">Priority / Type</th>
                                     <th className="p-4">Assignee</th>
                                     <th className="p-4">Status</th>
                                     <th className="p-4 text-right">Actions</th>
@@ -906,30 +945,28 @@ const AdminDashboard: React.FC = () => {
                                             <div className="text-xs text-slate-500">{booking.name} • {booking.date}</div>
                                         </td>
                                         <td className="p-4">
-                                            <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-semibold border border-slate-200">Normal</span>
+                                            <select 
+                                                className="border border-gray-300 rounded p-1 text-xs bg-white text-slate-900 w-full max-w-[150px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={booking.technician || 'Unassigned'}
+                                                onChange={(e) => handleAssignTechnician(booking.id, e.target.value)}
+                                            >
+                                                <option value="Unassigned">Unassigned</option>
+                                                {technicians.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                            </select>
                                         </td>
                                         <td className="p-4">
-                                            {booking.technician ? (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">
-                                                        {booking.technician.charAt(0)}
-                                                    </div>
-                                                    <span className="text-slate-700">{booking.technician}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-slate-400 text-xs italic">Unassigned</span>
-                                            )}
+                                            <select
+                                                className="border border-gray-300 rounded p-1 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={booking.status}
+                                                onChange={(e) => handleUpdateBookingStatus(booking.id, e.target.value)}
+                                            >
+                                                <option value="Pending">Pending</option>
+                                                <option value="In Progress">In Progress</option>
+                                                <option value="Completed">Completed</option>
+                                            </select>
                                         </td>
-                                        <td className="p-4"><StatusBadge status={booking.status} /></td>
                                         <td className="p-4 text-right">
                                             <div className="flex justify-end gap-2">
-                                                <button 
-                                                    onClick={() => setAssigningBookingId(booking.id)}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                                                    title="Assign Technician"
-                                                >
-                                                    <UserCog size={18} />
-                                                </button>
                                                 <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded">
                                                     <MoreVertical size={18} />
                                                 </button>
@@ -939,7 +976,7 @@ const AdminDashboard: React.FC = () => {
                                 ))}
                                 {bookings.filter(b => bookingFilter === 'All' || b.status === bookingFilter).length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="p-8 text-center text-slate-400">No tickets found in this view.</td>
+                                        <td colSpan={5} className="p-8 text-center text-slate-400">No tickets found in this view.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -948,7 +985,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* MESSAGES TAB (Support Inbox) */}
+            {/* MESSAGES TAB */}
             {activeTab === 'messages' && (
                 <div className="space-y-6">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -963,7 +1000,6 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                                 <p className="text-slate-600 my-4 bg-gray-50 p-4 rounded-lg border border-gray-100 whitespace-pre-wrap">{msg.message}</p>
                                 
-                                {/* Replies */}
                                 {msg.replies && msg.replies.length > 0 && (
                                     <div className="ml-8 mb-4 space-y-2 border-l-2 border-slate-200 pl-4">
                                         {msg.replies.map((reply: any, idx: number) => (
@@ -1014,18 +1050,18 @@ const AdminDashboard: React.FC = () => {
                             
                             {/* Client Info */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
+                                <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
+                                <input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
+                                <input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
                             </div>
 
                             {/* Add Item */}
                             <div className="bg-slate-50 p-4 rounded-lg border mb-4">
                                 <p className="text-xs font-bold text-slate-500 uppercase mb-2">Add Line Item</p>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                    <input className="border p-2 rounded bg-white text-slate-900 md:col-span-2" placeholder="Item Name / Service" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
-                                    <input className="border p-2 rounded bg-white text-slate-900" type="number" placeholder="Price" value={newQuoteItem.price || ''} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
-                                    <input className="border p-2 rounded bg-white text-slate-900" type="number" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
+                                    <input className={`${inputStyle} md:col-span-2`} placeholder="Item Name / Service" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
+                                    <input className={inputStyle} type="number" placeholder="Price" value={newQuoteItem.price || ''} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
+                                    <input className={inputStyle} type="number" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
                                 </div>
                                 <div className="flex justify-end mt-2">
                                     <button onClick={handleAddQuoteItem} className="text-sm bg-slate-900 text-white px-4 py-2 rounded hover:bg-slate-800">Add Item</button>
@@ -1095,6 +1131,7 @@ const AdminDashboard: React.FC = () => {
                                         <th className="p-4">Service Type</th>
                                         <th className="p-4">Amount</th>
                                         <th className="p-4">Timeline</th>
+                                        <th className="p-4">Date</th>
                                         <th className="p-4">Actions</th>
                                     </tr>
                                 </thead>
@@ -1108,12 +1145,13 @@ const AdminDashboard: React.FC = () => {
                                             <td className="p-4">{quote.serviceType}</td>
                                             <td className="p-4 font-bold text-slate-800">GHS {quote.grandTotal.toLocaleString()}</td>
                                             <td className="p-4"><span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs">{quote.timeline}</span></td>
+                                            <td className="p-4 text-slate-500">{new Date(quote.date).toLocaleDateString()}</td>
                                             <td className="p-4">
                                                 <button 
                                                     onClick={() => generateInvoice(quote)}
                                                     className="flex items-center gap-1 text-primary-600 hover:text-primary-800 font-medium text-xs bg-primary-50 hover:bg-primary-100 px-3 py-1.5 rounded transition"
                                                 >
-                                                    <Download size={14} /> Download PDF
+                                                    <Download size={14} /> PDF
                                                 </button>
                                             </td>
                                         </tr>
@@ -1125,40 +1163,172 @@ const AdminDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* INVENTORY TAB */}
+            {/* INVENTORY TAB - ENHANCED FORM */}
             {activeTab === 'inventory' && (
                 <div className="space-y-6">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <h3 className="text-lg font-bold text-slate-800">Product Inventory</h3>
-                        <Button onClick={() => setIsAddingProduct(!isAddingProduct)} size="sm">{isAddingProduct ? "Cancel" : "Add Product"}</Button>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <div className="relative flex-grow md:w-64">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search name, brand, category..." 
+                                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm text-slate-900 bg-white"
+                                    value={inventorySearch}
+                                    onChange={(e) => setInventorySearch(e.target.value)}
+                                />
+                            </div>
+                            <Button onClick={() => setIsAddingProduct(!isAddingProduct)} size="sm" className="whitespace-nowrap">
+                                {isAddingProduct ? "Cancel" : "Add Product"}
+                            </Button>
+                        </div>
                     </div>
 
                     {(isAddingProduct || editingProduct) && (
-                        <div className="bg-slate-50 p-6 rounded-xl border mb-6">
-                            <h4 className="font-bold mb-4 text-slate-800">{editingProduct ? "Edit Product" : "New Product"}</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Product Name" value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Price" type="number" value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: parseFloat(e.target.value)}) : setNewProduct({...newProduct, price: parseFloat(e.target.value)})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Stock" type="number" value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: parseInt(e.target.value)}) : setNewProduct({...newProduct, stock: parseInt(e.target.value)})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Category" value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})} />
+                        <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 mb-6 animate-in fade-in slide-in-from-top-4">
+                            <h4 className="font-bold text-xl mb-6 text-slate-900 pb-2 border-b">{editingProduct ? "Edit Product Details" : "Add New Product"}</h4>
+                            
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Left Col: Image */}
+                                <div className="lg:col-span-1">
+                                    <label className={labelStyle}>Product Image</label>
+                                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center min-h-[200px] bg-slate-50 hover:bg-slate-100 transition relative overflow-hidden group">
+                                        {(editingProduct?.image || newProduct.image) ? (
+                                            <img src={editingProduct?.image || newProduct.image} alt="Product" className="w-full h-full object-contain" />
+                                        ) : (
+                                            <div className="text-center text-slate-400">
+                                                <Image size={40} className="mx-auto mb-2" />
+                                                <p className="text-xs">Click to upload or drag image</p>
+                                            </div>
+                                        )}
+                                        <input 
+                                            type="file" 
+                                            className="absolute inset-0 opacity-0 cursor-pointer" 
+                                            onChange={(e) => handleProductImageUpload(e, !!editingProduct)}
+                                        />
+                                        {uploading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><RefreshCw className="animate-spin text-primary-600"/></div>}
+                                    </div>
+                                    <div className="mt-2 text-xs text-slate-400 text-center">Supported: JPG, PNG, WEBP</div>
+                                </div>
+
+                                {/* Right Col: Details */}
+                                <div className="lg:col-span-2 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={labelStyle}>Product Name</label>
+                                            <input className={inputStyle} 
+                                                value={editingProduct ? editingProduct.name : newProduct.name} 
+                                                onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} 
+                                                placeholder="e.g. Starlink Standard Kit"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className={labelStyle}>Brand</label>
+                                            <input className={inputStyle} 
+                                                value={editingProduct ? editingProduct.brand : newProduct.brand} 
+                                                onChange={e => editingProduct ? setEditingProduct({...editingProduct, brand: e.target.value}) : setNewProduct({...newProduct, brand: e.target.value})} 
+                                                placeholder="e.g. SpaceX, Hikvision"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className={labelStyle}>Category</label>
+                                            <select className={inputStyle}
+                                                value={editingProduct ? editingProduct.category : newProduct.category} 
+                                                onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}
+                                            >
+                                                {PRODUCT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelStyle}>Stock Qty</label>
+                                            <input type="number" className={inputStyle}
+                                                value={editingProduct ? editingProduct.stock : newProduct.stock} 
+                                                onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: parseInt(e.target.value)}) : setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className={labelStyle}>Price (GHS)</label>
+                                            <input type="number" className={inputStyle}
+                                                value={editingProduct ? editingProduct.price : newProduct.price} 
+                                                onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: parseFloat(e.target.value)}) : setNewProduct({...newProduct, price: parseFloat(e.target.value)})} 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className={labelStyle}>Original Price (Set higher to show discount)</label>
+                                        <input type="number" className={inputStyle}
+                                            value={editingProduct ? editingProduct.originalPrice : newProduct.originalPrice} 
+                                            onChange={e => editingProduct ? setEditingProduct({...editingProduct, originalPrice: parseFloat(e.target.value)}) : setNewProduct({...newProduct, originalPrice: parseFloat(e.target.value)})} 
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className={labelStyle}>Description</label>
+                                        <textarea rows={3} className={inputStyle}
+                                            value={editingProduct ? editingProduct.description : newProduct.description} 
+                                            onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})} 
+                                        ></textarea>
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-4">
+                                        <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-6 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">Cancel</button>
+                                        <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct}>
+                                            <Save size={18} className="mr-2" /> Save Product
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
-                            <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} size="sm">Save Product</Button>
                         </div>
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {products.map(product => (
-                            <div key={product.id} className="bg-white border rounded-xl p-4 flex flex-col hover:shadow-md transition">
-                                <img src={product.image} alt={product.name} className="h-32 object-contain mb-4" />
-                                <h4 className="font-bold text-slate-900 text-sm mb-1">{product.name}</h4>
-                                <p className="text-xs text-slate-500 mb-2">{product.category}</p>
-                                <div className="flex justify-between items-center mt-auto">
-                                    <span className="font-bold text-primary-600">GHS {product.price}</span>
-                                    <span className={`text-xs px-2 py-1 rounded ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{product.stock} in stock</span>
+                        {products.filter(product => 
+                            product.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                            product.category.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                            (product.brand && product.brand.toLowerCase().includes(inventorySearch.toLowerCase()))
+                        ).map(product => (
+                            <div key={product.id} className="bg-white border rounded-xl p-4 flex flex-col hover:shadow-md transition group">
+                                <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg mb-4 p-2">
+                                    <img src={product.image} alt={product.name} className="max-h-full max-w-full object-contain mix-blend-multiply" />
                                 </div>
-                                <button onClick={() => setEditingProduct(product)} className="mt-3 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded text-xs font-bold transition">Edit</button>
+                                <div className="mb-2">
+                                    <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1">{product.name}</h4>
+                                    <p className="text-xs text-slate-500">{product.brand} • {product.category}</p>
+                                </div>
+                                <div className="flex justify-between items-end mt-auto">
+                                    <div>
+                                        {product.originalPrice && product.originalPrice > product.price && (
+                                            <span className="text-xs text-slate-400 line-through block">GHS {product.originalPrice}</span>
+                                        )}
+                                        <span className="font-bold text-primary-600">GHS {product.price}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className={`text-[10px] px-2 py-1 rounded font-bold ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {product.stock} Stock
+                                        </span>
+                                    </div>
+                                </div>
+                                <button onClick={() => setEditingProduct(product)} className="mt-3 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1">
+                                    <Edit2 size={12} /> Edit
+                                </button>
                             </div>
                         ))}
+                        {products.filter(product => 
+                            product.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                            product.category.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                            (product.brand && product.brand.toLowerCase().includes(inventorySearch.toLowerCase()))
+                        ).length === 0 && (
+                            <div className="col-span-full text-center py-10 text-slate-400">
+                                <Search size={40} className="mx-auto mb-2 opacity-20" />
+                                <p>No products found matching "{inventorySearch}"</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1175,18 +1345,18 @@ const AdminDashboard: React.FC = () => {
                         <div className="bg-slate-50 p-4 rounded-xl border mb-6">
                             <h4 className="font-bold mb-3 text-slate-800">New Meeting</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Meeting Title" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
+                                <input className={inputStyle} placeholder="Meeting Title" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
                                 <select 
-                                    className="border p-2 rounded bg-white text-slate-900" 
+                                    className={inputStyle} 
                                     value={newMeetingData.platform} 
                                     onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value as any})}
                                 >
                                     <option value="Zoom">Zoom</option>
                                     <option value="Teams">Microsoft Teams</option>
                                 </select>
-                                <input className="border p-2 rounded bg-white text-slate-900" type="date" value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" type="time" value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
-                                <input className="border p-2 rounded bg-white text-slate-900" placeholder="Attendee Emails (comma separated)" value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
+                                <input className={inputStyle} type="date" value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
+                                <input className={inputStyle} type="time" value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
+                                <input className={inputStyle} placeholder="Attendee Emails (comma separated)" value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
                             </div>
                             <Button onClick={handleScheduleMeeting} size="sm">Schedule</Button>
                         </div>
@@ -1195,7 +1365,7 @@ const AdminDashboard: React.FC = () => {
                     {/* Chat Interface - Admin/User */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-8 p-6">
                         <h3 className="font-bold text-lg mb-4 text-slate-800">Internal Communication</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[400px]">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
                             {/* User List */}
                             <div className="border-r border-gray-100 pr-4 overflow-y-auto">
                                 <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Select User</h4>
@@ -1218,35 +1388,69 @@ const AdminDashboard: React.FC = () => {
                             <div className="md:col-span-2 flex flex-col">
                                 {chatTarget ? (
                                     <>
-                                        <div className="flex-grow overflow-y-auto bg-slate-50 rounded-lg p-4 mb-3 space-y-3">
+                                        <div className="flex-grow overflow-y-auto bg-slate-50 rounded-lg p-4 mb-3 space-y-3 border border-gray-200">
                                             {internalChats
                                                 .filter(c => (c.senderId === chatTarget.id && c.receiverId === 'admin') || (c.senderId === 'admin' && c.receiverId === chatTarget.id))
                                                 .map(chat => (
                                                 <div key={chat.id} className={`flex ${chat.senderId === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`p-3 rounded-xl max-w-[70%] text-sm ${chat.senderId === 'admin' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white border text-slate-800 rounded-bl-none'}`}>
+                                                    <div className={`p-3 rounded-xl max-w-[70%] text-sm shadow-sm ${chat.senderId === 'admin' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white border text-slate-800 rounded-bl-none'}`}>
                                                         <p>{chat.message}</p>
                                                         <span className="text-[10px] opacity-70 block text-right mt-1">{new Date(chat.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
                                                     </div>
                                                 </div>
                                             ))}
-                                            {internalChats.filter(c => (c.senderId === chatTarget.id && c.receiverId === 'admin') || (c.senderId === 'admin' && c.receiverId === chatTarget.id)).length === 0 && (
-                                                <p className="text-center text-slate-400 text-sm mt-10">Start a conversation with {chatTarget.name}</p>
-                                            )}
+                                            <div ref={chatEndRef}></div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                className="flex-grow border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" 
-                                                placeholder="Type a message..."
-                                                value={internalMessage}
-                                                onChange={e => setInternalMessage(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && handleInternalChat()}
-                                            />
-                                            <Button onClick={handleInternalChat} size="sm">Send</Button>
+                                        
+                                        {/* Updated Chat Input Area with Upload and Emoji */}
+                                        <div className="relative">
+                                            {showEmojiPicker && (
+                                                <div className="absolute bottom-14 left-0 bg-white shadow-xl border rounded-xl p-3 grid grid-cols-6 gap-2 z-10 w-64 animate-in slide-in-from-bottom-2">
+                                                    {emojis.map(e => (
+                                                        <button key={e} onClick={() => handleEmojiClick(e)} className="text-xl p-1 hover:bg-slate-100 rounded transition">
+                                                            {e}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-xl px-2 py-2">
+                                                <input 
+                                                    type="file" 
+                                                    ref={fileInputRef} 
+                                                    className="hidden" 
+                                                    onChange={handleFileChange} 
+                                                />
+                                                <button 
+                                                    className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-gray-100 transition" 
+                                                    title="Attach File"
+                                                    onClick={handleAttachClick}
+                                                >
+                                                    <Paperclip size={18} />
+                                                </button>
+                                                <button 
+                                                    className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-gray-100 transition" 
+                                                    title="Add Emoji"
+                                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                                >
+                                                    <Smile size={18} />
+                                                </button>
+                                                <input 
+                                                    className="flex-grow bg-transparent border-none text-sm focus:ring-0 text-slate-800 placeholder:text-slate-400 px-2 outline-none" 
+                                                    placeholder={`Message ${chatTarget.name}...`}
+                                                    value={internalMessage}
+                                                    onChange={e => setInternalMessage(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleInternalChat()}
+                                                />
+                                                <Button onClick={handleInternalChat} size="sm" className="rounded-lg px-4">Send</Button>
+                                            </div>
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="flex items-center justify-center h-full text-slate-400">
-                                        <p>Select a user to start chatting</p>
+                                    <div className="flex items-center justify-center h-full text-slate-400 bg-slate-50 rounded-xl border border-dashed border-gray-200">
+                                        <div className="text-center">
+                                            <MessageSquare size={40} className="mx-auto mb-2 opacity-20" />
+                                            <p>Select a user to start chatting</p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1263,9 +1467,9 @@ const AdminDashboard: React.FC = () => {
                         <div className="flex flex-col md:flex-row gap-6">
                             <div className="md:w-1/3 space-y-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Select Image Area</label>
+                                    <label className={labelStyle}>Select Image Area</label>
                                     <select 
-                                        className="w-full border p-2 rounded bg-white text-slate-900" 
+                                        className={inputStyle} 
                                         value={selectedImageKey} 
                                         onChange={(e) => setSelectedImageKey(e.target.value)}
                                     >
@@ -1273,16 +1477,16 @@ const AdminDashboard: React.FC = () => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Image URL</label>
+                                    <label className={labelStyle}>Image URL</label>
                                     <input 
-                                        className="w-full border p-2 rounded bg-white text-slate-900 text-sm" 
+                                        className={inputStyle} 
                                         value={currentImageUrl} 
                                         onChange={(e) => setCurrentImageUrl(e.target.value)} 
                                         placeholder="https://..."
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Or Upload New</label>
+                                    <label className={labelStyle}>Or Upload New</label>
                                     <input type="file" onChange={(e) => handleUploadImage(e)} className="text-sm" />
                                 </div>
                                 <Button onClick={handleSaveImages} className="w-full">Update Image</Button>
@@ -1299,236 +1503,202 @@ const AdminDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* CHATBOT & AI TAB */}
-            {activeTab === 'chatbot' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                        <div className="flex-grow">
-                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <Bot className="text-primary-600" /> Chatbot Knowledge Base
-                            </h3>
-                            <p className="text-sm text-slate-500">Manage automated responses and upload documents.</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <label className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer text-sm font-medium transition">
-                                {uploading ? <RefreshCw size={16} className="animate-spin" /> : <UploadCloud size={16} />} 
-                                <span>Upload JSON/PDF/DOCX</span>
-                                <input type="file" className="hidden" accept=".json,.pdf,.docx,.doc" onChange={handleKBUpload} disabled={uploading} />
-                            </label>
-                            <Button onClick={() => setIsAddingKB(!isAddingKB)} size="sm">
-                                {isAddingKB ? "Cancel" : <><Plus size={16} className="mr-1" /> Add Response</>}
-                            </Button>
-                        </div>
-                    </div>
-
-                    {isAddingKB && (
-                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6 animate-in fade-in slide-in-from-top-2">
-                            <h4 className="text-sm font-bold mb-3 text-slate-800 uppercase tracking-wide">New Knowledge Entry</h4>
-                            <div className="grid grid-cols-1 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">Keywords (Comma Separated)</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="e.g., price, cost, how much, pricing" 
-                                        className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
-                                        value={kbKeywordsInput} 
-                                        onChange={e => setKbKeywordsInput(e.target.value)} 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">AI Answer / Response</label>
-                                    <textarea 
-                                        rows={4}
-                                        placeholder="The response the bot should give..." 
-                                        className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
-                                        value={newKBEntry.answer} 
-                                        onChange={e => setNewKBEntry({...newKBEntry, answer: e.target.value})} 
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">Category</label>
-                                        <select 
-                                            className="w-full border p-3 rounded-lg bg-white text-slate-900" 
-                                            value={newKBEntry.category} 
-                                            onChange={e => setNewKBEntry({...newKBEntry, category: e.target.value})}
-                                        >
-                                            <option value="general">General</option>
-                                            <option value="pricing">Pricing</option>
-                                            <option value="service">Service</option>
-                                            <option value="support">Support</option>
-                                            <option value="troubleshooting">Troubleshooting</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex justify-end">
-                                <Button onClick={handleAddKBEntry} size="sm">Save Entry</Button>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="border rounded-xl overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 text-slate-700 text-xs uppercase border-b">
-                                <tr>
-                                    <th className="p-4 w-1/6">Category</th>
-                                    <th className="p-4 w-1/4">Keywords</th>
-                                    <th className="p-4 w-1/2">Response</th>
-                                    <th className="p-4 w-1/12 text-center">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-sm divide-y divide-gray-100">
-                                {knowledgeBase.map(entry => (
-                                    <tr key={entry.id} className="hover:bg-slate-50 group transition-colors">
-                                        <td className="p-4 align-top">
-                                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-bold uppercase">{entry.category}</span>
-                                        </td>
-                                        <td className="p-4 align-top">
-                                            <div className="flex flex-wrap gap-1">
-                                                {entry.keywords.map((k, i) => (
-                                                    <span key={i} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">{k}</span>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-slate-600 whitespace-pre-wrap align-top font-mono text-xs leading-relaxed">
-                                            {entry.answer.length > 100 ? entry.answer.substring(0, 100) + '...' : entry.answer}
-                                        </td>
-                                        <td className="p-4 text-center align-top">
-                                            <button 
-                                                onClick={() => handleDeleteKBEntry(entry.id)}
-                                                className="text-red-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition"
-                                                title="Delete Entry"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {knowledgeBase.length === 0 && (
-                                    <tr>
-                                        <td colSpan={4} className="p-8 text-center text-slate-400">
-                                            No knowledge base entries found. Add one or upload a JSON file.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
             {/* USERS MANAGEMENT TAB */}
             {activeTab === 'users' && (
-                <div className="space-y-6">
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold text-slate-800">User Management & Real-Time Monitoring</h3>
-                            <Button onClick={() => setIsAddingUser(!isAddingUser)} size="sm">
-                                {isAddingUser ? "Cancel" : "Add User"}
-                            </Button>
+                <div className="space-y-8">
+                    {/* User Manager Header */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 bg-white sticky top-0 z-10">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                        <Users className="text-primary-600" size={24} /> User Directory
+                                    </h3>
+                                    <p className="text-sm text-slate-500 mt-1">Manage user roles, access, and account status.</p>
+                                </div>
+                                <div className="flex gap-3 w-full md:w-auto">
+                                    <div className="relative flex-grow md:flex-grow-0">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search users..." 
+                                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-full"
+                                            value={userSearch}
+                                            onChange={(e) => setUserSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <Button onClick={() => setIsAddingUser(!isAddingUser)} size="sm" className="whitespace-nowrap">
+                                        {isAddingUser ? "Cancel" : <><UserPlus size={16} className="mr-2" /> Add User</>}
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
 
                         {isAddingUser && (
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 animate-in fade-in slide-in-from-top-2">
-                                <h4 className="text-sm font-bold mb-3">Add New User</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                    <input type="text" placeholder="Full Name" className="border p-2 rounded bg-white text-slate-900" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
-                                    <input type="email" placeholder="Email" className="border p-2 rounded bg-white text-slate-900" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
-                                    <input type="password" placeholder="Password" className="border p-2 rounded bg-white text-slate-900" value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
-                                    <select className="border p-2 rounded bg-white text-slate-900" value={newUserData.role} onChange={e => setNewUserData({...newUserData, role: e.target.value})}>
-                                        <option value="customer">Customer</option>
-                                        <option value="technician">Technician</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
+                            <div className="bg-slate-50 p-6 border-b border-gray-100 animate-in slide-in-from-top-2">
+                                <h4 className="text-sm font-bold text-slate-800 mb-4 uppercase tracking-wide">Create New Account</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">Full Name</label>
+                                        <input className={inputStyle} type="text" placeholder="John Doe" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">Email Address</label>
+                                        <input className={inputStyle} type="email" placeholder="john@example.com" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">Password</label>
+                                        <input className={inputStyle} type="password" placeholder="••••••••" value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">Role</label>
+                                        <select className={inputStyle} value={newUserData.role} onChange={e => setNewUserData({...newUserData, role: e.target.value})}>
+                                            <option value="customer">Customer</option>
+                                            <option value="technician">Technician</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <Button onClick={handleCreateUser} size="sm">Create Account</Button>
+                                <div className="flex justify-end">
+                                    <Button onClick={handleCreateUser} size="sm">Create Account</Button>
+                                </div>
                             </div>
                         )}
 
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50 text-slate-700 text-xs uppercase">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-gray-100">
                                     <tr>
-                                        <th className="p-3">User</th>
-                                        <th className="p-3">Role</th>
-                                        <th className="p-3">Status (Real-Time)</th>
-                                        <th className="p-3">Last Active</th>
-                                        <th className="p-3">Actions</th>
+                                        <th className="px-6 py-4">User Identity</th>
+                                        <th className="px-6 py-4">Role & Access</th>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Activity</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm divide-y divide-gray-100">
-                                    {users.map(user => (
-                                        <tr key={user.id} className="hover:bg-slate-50">
-                                            <td className="p-3 font-medium">
-                                                <div>{user.name}</div>
-                                                <div className="text-xs text-slate-400">{user.email}</div>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                    {users.filter(u => 
+                                        u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                                        u.email.toLowerCase().includes(userSearch.toLowerCase())
+                                    ).map(user => (
+                                        <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm
+                                                        ${user.role === 'admin' ? 'bg-purple-600' : user.role === 'technician' ? 'bg-blue-600' : 'bg-slate-400'}
+                                                    `}>
+                                                        {user.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900 text-sm">{user.name}</p>
+                                                        <p className="text-xs text-slate-500">{user.email}</p>
+                                                    </div>
+                                                </div>
                                             </td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                                    user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                                                    user.role === 'technician' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-green-100 text-green-700'
-                                                }`}>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize border
+                                                    ${user.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-100' : 
+                                                      user.role === 'technician' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
+                                                      'bg-green-50 text-green-700 border-green-100'}
+                                                `}>
                                                     {user.role}
                                                 </span>
                                             </td>
-                                            <td className="p-3">
+                                            <td className="px-6 py-4">
                                                 {user.isOnline ? (
-                                                    <span className="flex items-center gap-2 text-green-600 font-bold text-xs"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Online ({user.location || 'Unknown'})</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="relative flex h-2 w-2">
+                                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                        </span>
+                                                        <span className="text-xs font-medium text-green-700">Online</span>
+                                                        {user.location && <span className="text-[10px] text-slate-400 border px-1 rounded bg-white">{user.location}</span>}
+                                                    </div>
                                                 ) : (
-                                                    <span className="flex items-center gap-2 text-slate-400 text-xs"><span className="w-2 h-2 rounded-full bg-slate-300"></span> Offline</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="h-2 w-2 rounded-full bg-slate-300"></span>
+                                                        <span className="text-xs text-slate-500">Offline</span>
+                                                    </div>
                                                 )}
                                             </td>
-                                            <td className="p-3 text-slate-500 text-xs">
-                                                {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+                                            <td className="px-6 py-4 text-xs text-slate-500">
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-slate-700">Last Login:</span>
+                                                    <span>{user.lastLogin && user.lastLogin !== 'Never' ? new Date(user.lastLogin).toLocaleString() : 'Never'}</span>
+                                                </div>
                                             </td>
-                                            <td className="p-3">
-                                                <button className="text-blue-600 hover:underline mr-2" onClick={() => api.updateUserRole(user.id, user.role === 'admin' ? 'customer' : 'admin')}>
-                                                    Change Role
+                                            <td className="px-6 py-4 text-right">
+                                                <button 
+                                                    onClick={() => api.updateUserRole(user.id, user.role === 'admin' ? 'customer' : 'admin')}
+                                                    className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline transition-colors"
+                                                >
+                                                    Modify Role
                                                 </button>
                                             </td>
                                         </tr>
                                     ))}
+                                    {users.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-sm">No users found matching your search.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     {/* LOGIN LOGS SECTION */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><ShieldCheck size={20} /> Security & Login Logs</h3>
-                        <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50 text-slate-700 text-xs uppercase sticky top-0">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="p-6 border-b border-gray-100">
+                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                <ShieldCheck className="text-green-600" size={24} /> Security & Audit Logs
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-1">Recent login attempts and security events.</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-gray-100">
                                     <tr>
-                                        <th className="p-3">User</th>
-                                        <th className="p-3">IP Address</th>
-                                        <th className="p-3">Location</th>
-                                        <th className="p-3">Device</th>
-                                        <th className="p-3">Time</th>
-                                        <th className="p-3">Risk Grade</th>
+                                        <th className="px-6 py-4">User</th>
+                                        <th className="px-6 py-4">IP Address & Location</th>
+                                        <th className="px-6 py-4">Device</th>
+                                        <th className="px-6 py-4">Timestamp</th>
+                                        <th className="px-6 py-4 text-center">Risk Analysis</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm divide-y divide-gray-100">
+                                <tbody className="divide-y divide-gray-100 bg-white">
                                     {loginLogs.map((log) => (
-                                        <tr key={log.id} className="hover:bg-slate-50">
-                                            <td className="p-3 font-medium">{log.userName}</td>
-                                            <td className="p-3 font-mono text-slate-500">{log.ip}</td>
-                                            <td className="p-3">{log.location}</td>
-                                            <td className="p-3">{log.device}</td>
-                                            <td className="p-3 text-slate-500 text-xs">{new Date(log.timestamp).toLocaleString()}</td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                                    log.riskScore === 'High' ? 'bg-red-100 text-red-700' :
-                                                    log.riskScore === 'Medium' ? 'bg-orange-100 text-orange-700' :
-                                                    'bg-green-100 text-green-700'
-                                                }`}>
-                                                    {log.riskScore}
+                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-medium text-sm text-slate-900">{log.userName}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded w-fit mb-1">{log.ip}</span>
+                                                    <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={10} /> {log.location}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-600">{log.device}</td>
+                                            <td className="px-6 py-4 text-xs text-slate-500 font-mono">
+                                                {new Date(log.timestamp).toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border
+                                                    ${log.riskScore === 'High' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                      log.riskScore === 'Medium' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                      'bg-green-50 text-green-700 border-green-200'}
+                                                `}>
+                                                    {log.riskScore === 'High' && <AlertCircle size={12} />}
+                                                    {log.riskScore === 'Medium' && <AlertCircle size={12} />}
+                                                    {log.riskScore === 'Low' && <ShieldCheck size={12} />}
+                                                    {log.riskScore} Risk
                                                 </span>
                                             </td>
                                         </tr>
                                     ))}
+                                    {loginLogs.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-sm">No recent login activity logged.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -1538,22 +1708,22 @@ const AdminDashboard: React.FC = () => {
 
             {/* COMMUNICATION TAB (BULK) */}
             {activeTab === 'communication' && (
-                <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 max-w-3xl">
+                <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 max-w-4xl mx-auto">
                     <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                         <Megaphone size={24} className="text-primary-600" /> Bulk Messaging Center
                     </h2>
                     
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => setBulkType('email')} className={`p-4 border rounded-lg flex items-center gap-3 ${bulkType === 'email' ? 'bg-blue-50 border-blue-500' : ''}`}>
-                                <Mail className="text-blue-500" /> 
+                            <button onClick={() => setBulkType('email')} className={`p-4 border rounded-lg flex items-center gap-3 transition-colors ${bulkType === 'email' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                                <Mail className={bulkType === 'email' ? "text-blue-600" : "text-slate-400"} /> 
                                 <div className="text-left">
                                     <div className="font-bold text-slate-800">Email Broadcast</div>
                                     <div className="text-xs text-slate-500">Send via SMTP</div>
                                 </div>
                             </button>
-                            <button onClick={() => setBulkType('sms')} className={`p-4 border rounded-lg flex items-center gap-3 ${bulkType === 'sms' ? 'bg-green-50 border-green-500' : ''}`}>
-                                <Smartphone className="text-green-500" /> 
+                            <button onClick={() => setBulkType('sms')} className={`p-4 border rounded-lg flex items-center gap-3 transition-colors ${bulkType === 'sms' ? 'bg-green-50 border-green-500 ring-1 ring-green-500' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                                <Smartphone className={bulkType === 'sms' ? "text-green-600" : "text-slate-400"} /> 
                                 <div className="text-left">
                                     <div className="font-bold text-slate-800">SMS Blast</div>
                                     <div className="text-xs text-slate-500">Via Gateway</div>
@@ -1562,8 +1732,8 @@ const AdminDashboard: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Target Audience</label>
-                            <select className="w-full border p-3 rounded-lg bg-white text-slate-900" value={bulkRecipients} onChange={(e) => setBulkRecipients(e.target.value)}>
+                            <label className={labelStyle}>Target Audience</label>
+                            <select className={inputStyle} value={bulkRecipients} onChange={(e) => setBulkRecipients(e.target.value)}>
                                 <option value="all">All Users ({users.length})</option>
                                 <option value="technician">Technicians Only</option>
                                 <option value="customer">Customers Only</option>
@@ -1572,15 +1742,16 @@ const AdminDashboard: React.FC = () => {
 
                         {bulkType === 'email' && (
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">Subject Line</label>
-                                <input type="text" className="w-full border p-3 rounded-lg bg-white text-slate-900" placeholder="Newsletter Subject" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} />
+                                <label className={labelStyle}>Subject Line</label>
+                                <input type="text" className={inputStyle} placeholder="Newsletter Subject" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} />
                             </div>
                         )}
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Message Content</label>
+                            <label className={labelStyle}>Message Content</label>
                             <textarea 
-                                className="w-full border p-3 rounded-lg h-32 bg-white text-slate-900" 
+                                className={inputStyle}
+                                style={{ minHeight: '150px' }}
                                 placeholder={bulkType === 'email' ? "HTML or Plain text content..." : "SMS content (160 chars recommended)..."}
                                 value={bulkMessage}
                                 onChange={(e) => setBulkMessage(e.target.value)}
@@ -1588,9 +1759,11 @@ const AdminDashboard: React.FC = () => {
                             {bulkType === 'sms' && <p className="text-xs text-slate-500 mt-1">{bulkMessage.length} characters</p>}
                         </div>
 
-                        <Button onClick={handleSendBulkMessage} className="w-full">
-                            Send Broadcast
-                        </Button>
+                        <div className="flex justify-end">
+                            <Button onClick={handleSendBulkMessage} className="w-full md:w-auto">
+                                <Send size={18} className="mr-2" /> Send Broadcast
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1611,12 +1784,12 @@ const AdminDashboard: React.FC = () => {
                                     <Image size={18} /> Branding
                                 </h3>
                                 <div className="flex items-center gap-6">
-                                    <div className="w-24 h-24 border rounded-lg flex items-center justify-center bg-gray-50">
-                                        {settings.logoUrl ? <img src={settings.logoUrl} alt="Logo" className="max-w-full max-h-full p-2" /> : <span className="text-xs text-slate-400">No Logo</span>}
+                                    <div className="w-24 h-24 border rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                                        {settings.logoUrl ? <img src={settings.logoUrl} alt="Logo" className="max-w-full max-h-full p-2 object-contain" /> : <span className="text-xs text-slate-400">No Logo</span>}
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Website Logo</label>
-                                        <input type="file" accept="image/*" onChange={handleUploadLogo} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"/>
+                                        <label className={labelStyle}>Website Logo</label>
+                                        <input type="file" accept="image/*" onChange={handleUploadLogo} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"/>
                                         <p className="text-xs text-slate-400 mt-1">Upload PNG or SVG for best results.</p>
                                     </div>
                                 </div>
@@ -1629,20 +1802,20 @@ const AdminDashboard: React.FC = () => {
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Admin Email</label>
-                                        <input type="email" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} />
+                                        <label className={labelStyle}>Admin Email</label>
+                                        <input type="email" className={inputStyle} value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Host</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smtpHost} onChange={e => setSettings({...settings, smtpHost: e.target.value})} />
+                                        <label className={labelStyle}>SMTP Host</label>
+                                        <input type="text" className={inputStyle} value={settings.smtpHost} onChange={e => setSettings({...settings, smtpHost: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">SMTP User</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smtpUser} onChange={e => setSettings({...settings, smtpUser: e.target.value})} />
+                                        <label className={labelStyle}>SMTP User</label>
+                                        <input type="text" className={inputStyle} value={settings.smtpUser} onChange={e => setSettings({...settings, smtpUser: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Password</label>
-                                        <input type="password" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smtpPass} onChange={e => setSettings({...settings, smtpPass: e.target.value})} />
+                                        <label className={labelStyle}>SMTP Password</label>
+                                        <input type="password" className={inputStyle} value={settings.smtpPass} onChange={e => setSettings({...settings, smtpPass: e.target.value})} />
                                     </div>
                                 </div>
                             </div>
@@ -1663,22 +1836,44 @@ const AdminDashboard: React.FC = () => {
                                 </h3>
                                 <div className="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">General Form Webhook URL</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/forms" />
+                                        <label className={labelStyle}>General Form Webhook URL</label>
+                                        <input type="text" className={inputStyle} value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/forms" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Quote Integration Webhook URL</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/quotes" />
+                                        <label className={labelStyle}>Quote Integration Webhook URL</label>
+                                        <input type="text" className={inputStyle} value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/quotes" />
                                         <p className="text-xs text-slate-500 mt-1">Dedicated webhook for handling complex quote logic and CRM syncing.</p>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Request a Quick Callback Webhook URL</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.n8nCallbackWebhook} onChange={e => setSettings({...settings, n8nCallbackWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/callback" />
+                                        <label className={labelStyle}>Request a Quick Callback Webhook URL</label>
+                                        <input type="text" className={inputStyle} value={settings.n8nCallbackWebhook} onChange={e => setSettings({...settings, n8nCallbackWebhook: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/callback" />
                                         <p className="text-xs text-slate-500 mt-1">Triggers when a user requests a callback from the homepage.</p>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Chatbot Webhook URL</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} />
+                                        <label className={labelStyle}>Chatbot Webhook URL</label>
+                                        <input type="text" className={inputStyle} value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Formspree Integration */}
+                            <div>
+                                <h3 className="text-md font-bold text-slate-800 border-b pb-2 mb-4 flex items-center gap-2">
+                                    <Send size={18} /> Formspree Integration
+                                </h3>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label className={labelStyle}>Formspree Endpoint URL</label>
+                                        <input 
+                                            type="text" 
+                                            className={inputStyle} 
+                                            value={settings.formspreeUrl} 
+                                            onChange={e => setSettings({...settings, formspreeUrl: e.target.value})} 
+                                            placeholder="https://formspree.io/f/your-form-id" 
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Alternative email service for contact forms.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -1690,20 +1885,20 @@ const AdminDashboard: React.FC = () => {
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Provider</label>
-                                        <select className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smsProvider} onChange={e => setSettings({...settings, smsProvider: e.target.value})}>
+                                        <label className={labelStyle}>Provider</label>
+                                        <select className={inputStyle} value={settings.smsProvider} onChange={e => setSettings({...settings, smsProvider: e.target.value})}>
                                             <option value="AfricaTalking">Africa's Talking</option>
                                             <option value="Twilio">Twilio</option>
                                             <option value="Hubtel">Hubtel</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Sender ID</label>
-                                        <input type="text" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smsSenderId} onChange={e => setSettings({...settings, smsSenderId: e.target.value})} />
+                                        <label className={labelStyle}>Sender ID</label>
+                                        <input type="text" className={inputStyle} value={settings.smsSenderId} onChange={e => setSettings({...settings, smsSenderId: e.target.value})} />
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">API Key / Auth Token</label>
-                                        <input type="password" className="w-full border rounded px-3 py-2 bg-white text-slate-900" value={settings.smsApiKey} onChange={e => setSettings({...settings, smsApiKey: e.target.value})} />
+                                        <label className={labelStyle}>API Key / Auth Token</label>
+                                        <input type="password" className={inputStyle} value={settings.smsApiKey} onChange={e => setSettings({...settings, smsApiKey: e.target.value})} />
                                     </div>
                                 </div>
                             </div>
@@ -1721,6 +1916,36 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* REMOTE ACCESS MODAL (Global for Admin Dashboard) */}
+      {showRemoteModal && (
+            <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200 relative">
+                    <button onClick={() => setShowRemoteModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-900">
+                        <Monitor size={24} className="text-primary-600" /> Admin Remote Access
+                    </h3>
+                    <p className="text-sm text-slate-500 mb-4">Enter client's Session ID to connect:</p>
+                    <input 
+                        type="text" 
+                        className="w-full border-2 border-primary-100 focus:border-primary-500 rounded-lg px-4 py-3 mb-6 text-center font-mono text-xl tracking-widest bg-slate-50 text-slate-900 font-bold outline-none transition-colors"
+                        placeholder="000 000 000"
+                        value={remoteId}
+                        onChange={e => setRemoteId(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-3 mb-2">
+                        <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 font-bold transition flex flex-col items-center justify-center gap-1">
+                            <span>AnyDesk</span>
+                            <span className="text-[10px] opacity-80 font-normal">Launch App</span>
+                        </button>
+                        <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold transition flex flex-col items-center justify-center gap-1">
+                            <span>TeamViewer</span>
+                            <span className="text-[10px] opacity-80 font-normal">Launch App</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+      )}
     </div>
   );
 };

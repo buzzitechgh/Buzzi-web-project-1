@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download } from 'lucide-react';
+import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
 import { ChatMessage, Meeting } from '../types';
@@ -19,6 +19,11 @@ const CustomerDashboard: React.FC = () => {
   const [ratingVal, setRatingVal] = useState(5);
   const [feedback, setFeedback] = useState("");
   const [newMessage, setNewMessage] = useState("");
+
+  // Chat Interaction States
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojis = ["👍", "👋", "😊", "😂", "❤️", "🔥", "🎉", "✅", "❌", "🤔", "💻", "🔧"];
 
   useEffect(() => {
     const storedUser = localStorage.getItem('customerUser');
@@ -74,6 +79,24 @@ const CustomerDashboard: React.FC = () => {
       const res = await api.sendInternalMessage(user.id, user.name, newMessage, 'admin', 'customer');
       setChats(prev => [...prev, res.message]);
       setNewMessage("");
+      setShowEmojiPicker(false);
+  };
+
+  const handleEmojiClick = (emoji: string) => {
+      setNewMessage(prev => prev + emoji);
+      setShowEmojiPicker(false);
+  };
+
+  const handleAttachClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setNewMessage(prev => prev + ` [Attachment: ${file.name}] `);
+          e.target.value = ''; // Reset
+      }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">Loading Dashboard...</div>;
@@ -172,7 +195,7 @@ const CustomerDashboard: React.FC = () => {
                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                      <MessageSquare className="text-blue-500" /> Tech Support
                   </h2>
-                  <div className="flex-grow overflow-y-auto space-y-3 pr-2 mb-4 bg-slate-50 rounded-lg p-3">
+                  <div className="flex-grow overflow-y-auto space-y-3 pr-2 mb-4 bg-slate-50 rounded-lg p-3 border border-gray-100">
                       {chats
                         .filter(c => (c.senderId === user.id && c.receiverId === 'admin') || (c.senderId === 'admin' && c.receiverId === user.id) || c.isSystem)
                         .map(chat => (
@@ -186,16 +209,49 @@ const CustomerDashboard: React.FC = () => {
                       ))}
                       {chats.length === 0 && <p className="text-center text-xs text-gray-400 mt-10">Start a chat with our support team.</p>}
                   </div>
-                  <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        className="flex-grow border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="Type a message..."
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                      />
-                      <button onClick={handleSendMessage} className="bg-primary-600 text-white p-2 rounded-lg"><ChevronRight /></button>
+                  
+                  {/* Chat Input with Upload/Emoji */}
+                  <div className="relative">
+                      {showEmojiPicker && (
+                          <div className="absolute bottom-14 left-0 bg-white shadow-xl border rounded-xl p-3 grid grid-cols-6 gap-2 z-10 w-full animate-in slide-in-from-bottom-2">
+                              {emojis.map(e => (
+                                  <button key={e} onClick={() => handleEmojiClick(e)} className="text-xl p-1 hover:bg-slate-100 rounded transition">
+                                      {e}
+                                  </button>
+                              ))}
+                          </div>
+                      )}
+                      <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-2 border border-gray-200">
+                          <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              onChange={handleFileChange} 
+                          />
+                          <button 
+                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-200 rounded-full transition" 
+                              title="Add File"
+                              onClick={handleAttachClick}
+                          >
+                              <Paperclip size={18} />
+                          </button>
+                          <button 
+                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-200 rounded-full transition" 
+                              title="Add Emoji"
+                              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          >
+                              <Smile size={18} />
+                          </button>
+                          <input 
+                            type="text" 
+                            className="flex-grow bg-transparent border-none text-sm focus:ring-0 text-slate-800 placeholder:text-slate-400 px-2 outline-none"
+                            placeholder="Type a message..."
+                            value={newMessage}
+                            onChange={e => setNewMessage(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                          />
+                          <button onClick={handleSendMessage} className="bg-primary-600 text-white p-2 rounded-lg hover:bg-primary-700 transition"><ChevronRight size={18} /></button>
+                      </div>
                   </div>
                </div>
 

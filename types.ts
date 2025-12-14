@@ -84,6 +84,7 @@ export interface Product {
   name: string;
   price: number;
   originalPrice?: number; // Added for discount display (strikethrough)
+  brand?: string; // Added for detailed inventory
   category: string;
   image: string;
   description: string;

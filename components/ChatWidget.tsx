@@ -17,7 +17,7 @@ interface IWindow extends Window {
 }
 
 // Sound Utility using Web Audio API to avoid external asset dependencies
-const playSound = (type: 'popup' | 'message' | 'sent') => {
+const playSound = (type: 'popup' | 'message' | 'sent' | 'close') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -42,6 +42,18 @@ const playSound = (type: 'popup' | 'message' | 'sent') => {
       
       oscillator.start(now);
       oscillator.stop(now + 0.1);
+
+    } else if (type === 'close') {
+      // Close Sound: Quick downward frequency sweep
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(600, now);
+      oscillator.frequency.exponentialRampToValueAtTime(300, now + 0.15);
+      
+      gainNode.gain.setValueAtTime(0.05, now);
+      gainNode.gain.linearRampToValueAtTime(0, now + 0.15);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.15);
 
     } else if (type === 'message') {
       // Dropdown/Incoming Message Sound: Soft "bubble" or "blip"
@@ -127,17 +139,19 @@ const ChatWidget: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping, isOpen]);
 
-  // Sound Effects
+  // Sound Effects for Opening
   useEffect(() => {
     if (isOpen) {
       playSound('popup');
     }
   }, [isOpen]);
 
+  // Sound Effects for Incoming Messages
   useEffect(() => {
     // Only play sound for new messages (skip initial load)
     if (messages.length > 1) {
       const lastMessage = messages[messages.length - 1];
+      // Only play if it's the bot sending (user sent sound is handled in handleSendMessage)
       if (lastMessage.sender === 'bot') {
         playSound('message');
       }
@@ -162,6 +176,7 @@ const ChatWidget: React.FC = () => {
         // 4. Auto-minimize after 30 seconds
         closeTimeout = setTimeout(() => {
           setIsOpen((prev) => {
+            if(prev) playSound('close');
             return false;
           });
         }, 30000);
@@ -468,7 +483,13 @@ const ChatWidget: React.FC = () => {
                 <p className="text-xs text-slate-300">Online | Powered by N8N</p>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+            <button 
+              onClick={() => {
+                playSound('close');
+                setIsOpen(false);
+              }} 
+              className="text-slate-400 hover:text-white transition-colors"
+            >
               <X size={20} />
             </button>
           </div>
@@ -576,7 +597,10 @@ const ChatWidget: React.FC = () => {
 
       {/* Toggle Button */}
       <button 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (isOpen) playSound('close');
+          setIsOpen(!isOpen);
+        }}
         className={`bg-brand-yellow hover:bg-yellow-500 text-slate-900 ${isVibrating && !isOpen ? 'animate-wiggle' : ''} p-4 rounded-full shadow-xl transition-all duration-300 hover:scale-105 flex items-center justify-center relative border-2 border-white/20`}
       >
         {isOpen ? (

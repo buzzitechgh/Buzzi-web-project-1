@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CheckCircle, Shield, Cpu, Network, Zap, Satellite, Video, Server, Star, Wifi, ShoppingCart, Globe, PhoneCall } from 'lucide-react';
+import { ArrowRight, CheckCircle, Shield, Cpu, Network, Zap, Satellite, Video, Server, Star, Wifi, ShoppingCart, Globe, PhoneCall, X, Loader2 } from 'lucide-react';
 import Button from '../components/Button';
 import { SERVICES } from '../constants';
 import { Link } from 'react-router-dom';
@@ -9,8 +9,17 @@ import { api } from '../services/api';
 
 const Home: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  
+  // Lead Form State (Bottom Section)
   const [leadContact, setLeadContact] = useState("");
   const [leadSent, setLeadSent] = useState(false);
+  
+  // Modal State (Hero Section)
+  const [showCallbackModal, setShowCallbackModal] = useState(false);
+  const [modalContact, setModalContact] = useState("");
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalSuccess, setModalSuccess] = useState(false);
+
   const [slideImages, setSlideImages] = useState<string[]>([
       "https://images.unsplash.com/photo-1551703606-2ad43d5b24c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
       "https://images.unsplash.com/photo-1599256872237-5dcc0fbe9668?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
@@ -35,18 +44,39 @@ const Home: React.FC = () => {
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Strict phone number validation (digits only, min 9 chars)
     const phoneRegex = /^[0-9\-\+\s]{9,}$/;
     if (!phoneRegex.test(leadContact)) {
         alert("Please enter a valid phone number.");
         return;
     }
-
     await api.submitLead(leadContact);
     setLeadSent(true);
     setTimeout(() => setLeadSent(false), 3000);
     setLeadContact("");
+  };
+
+  const handleModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const phoneRegex = /^[0-9\-\+\s]{9,}$/;
+    if (!phoneRegex.test(modalContact)) {
+        alert("Please enter a valid phone number.");
+        return;
+    }
+    
+    setModalLoading(true);
+    try {
+        await api.submitLead(modalContact);
+        setModalSuccess(true);
+        setModalContact("");
+        setTimeout(() => {
+            setShowCallbackModal(false);
+            setModalSuccess(false);
+        }, 3000);
+    } catch (e) {
+        alert("Failed to submit request. Please try again.");
+    } finally {
+        setModalLoading(false);
+    }
   };
 
   // 5 Specific Slides with Professional Imagery
@@ -154,13 +184,19 @@ const Home: React.FC = () => {
                 Specializing in Network Engineering, CCTV Security, Starlink Installation, Hotspot WiFi, and POS Systems for modern businesses.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
                 <Button to="/booking" variant="primary" className="bg-brand-yellow hover:bg-yellow-500 text-slate-900 border-none font-bold">
                   Book Service
                 </Button>
                 <Button to="/quote" variant="outline" className="text-white border-white/30 hover:bg-white/10">
                   Get Quote
                 </Button>
+                <button 
+                  onClick={() => setShowCallbackModal(true)}
+                  className="px-6 py-3 rounded-md border border-white/30 text-white font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 backdrop-blur-sm"
+                >
+                  <PhoneCall size={18} /> Request Callback
+                </button>
               </div>
 
               {/* Trust Indicators */}
@@ -362,6 +398,59 @@ const Home: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* CALLBACK MODAL */}
+      {showCallbackModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 relative animate-in zoom-in-95 duration-200">
+                <button 
+                    onClick={() => setShowCallbackModal(false)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                    <X size={20} />
+                </button>
+                
+                <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-brand-yellow/10 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-yellow">
+                        <PhoneCall size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900">Request a Callback</h3>
+                    <p className="text-slate-500 text-sm mt-1">Leave your number and our engineering team will call you shortly.</p>
+                </div>
+
+                {modalSuccess ? (
+                    <div className="bg-green-50 text-green-700 p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                        <CheckCircle size={32} className="mb-2" />
+                        <span className="font-bold">Request Received!</span>
+                        <span className="text-xs mt-1">We will be in touch soon.</span>
+                    </div>
+                ) : (
+                    <form onSubmit={handleModalSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Phone Number</label>
+                            <input 
+                                type="tel" 
+                                required
+                                pattern="[0-9\-\+\s]{9,}"
+                                autoFocus
+                                placeholder="050 000 0000" 
+                                value={modalContact}
+                                onChange={(e) => setModalContact(e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-slate-50 text-lg font-medium text-center tracking-wide"
+                            />
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={modalLoading}
+                            className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-primary-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                            {modalLoading ? <Loader2 size={20} className="animate-spin" /> : "Call Me Back"}
+                        </button>
+                    </form>
+                )}
+            </div>
+        </div>
+      )}
     </div>
   );
 };
