@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip } from 'lucide-react';
+import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
 import { ChatMessage, Meeting } from '../types';
@@ -10,6 +10,7 @@ const CustomerDashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [chats, setChats] = useState<ChatMessage[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,18 +40,17 @@ const CustomerDashboard: React.FC = () => {
   const fetchData = async (email: string) => {
     setLoading(true);
     try {
-        const [ordersData, ticketsData, chatsData, meetingsData] = await Promise.all([
+        const [ordersData, ticketsData, bookingsData, chatsData, meetingsData] = await Promise.all([
             api.getCustomerOrders(email),
             api.getCustomerTickets(email),
+            api.getCustomerBookings(email),
             api.getChatMessages(),
             api.getMeetings()
         ]);
         setOrders(ordersData);
         setTickets(ticketsData);
-        
-        // Filter messages for this customer (from/to them or general system)
+        setBookings(bookingsData);
         setChats(chatsData);
-        
         setMeetings(meetingsData); 
     } catch (e) {
         console.error("Fetch failed", e);
@@ -124,6 +124,38 @@ const CustomerDashboard: React.FC = () => {
            
            {/* Column 1: Core Operations */}
            <div className="md:col-span-2 space-y-8">
+               
+               {/* Active Appointments (NEW) */}
+               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                  <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                     <Calendar className="text-brand-yellow" /> Active Appointments
+                  </h2>
+                  {bookings.filter(b => b.status !== 'Completed').length === 0 ? (
+                      <p className="text-slate-400 text-sm">No active service appointments.</p>
+                  ) : (
+                      <div className="space-y-4">
+                          {bookings.filter(b => b.status !== 'Completed').map(booking => (
+                              <div key={booking.id} className="border border-blue-100 bg-blue-50 rounded-xl p-5 flex flex-col md:flex-row justify-between items-center gap-4">
+                                  <div>
+                                      <h4 className="font-bold text-slate-800">{booking.serviceType}</h4>
+                                      <p className="text-sm text-slate-600 mb-1">{new Date(booking.date).toDateString()} at {booking.time}</p>
+                                      <span className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full">{booking.status}</span>
+                                  </div>
+                                  
+                                  {/* Completion Code Box */}
+                                  <div className="text-center bg-white p-3 rounded-lg border border-gray-200 shadow-sm w-full md:w-auto">
+                                      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Completion Code</p>
+                                      <p className="text-2xl font-mono font-bold text-slate-800 tracking-widest">{booking.completionCode}</p>
+                                      <p className="text-[10px] text-green-600 mt-1 flex items-center justify-center gap-1">
+                                          <ShieldCheck size={10} /> Give to Tech
+                                      </p>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+               </div>
+
                {/* Active Orders */}
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -221,7 +253,7 @@ const CustomerDashboard: React.FC = () => {
                               ))}
                           </div>
                       )}
-                      <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-2 border border-gray-200">
+                      <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-slate-300 shadow-sm focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500 transition-all">
                           <input 
                               type="file" 
                               ref={fileInputRef} 
@@ -229,14 +261,14 @@ const CustomerDashboard: React.FC = () => {
                               onChange={handleFileChange} 
                           />
                           <button 
-                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-200 rounded-full transition" 
+                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition" 
                               title="Add File"
                               onClick={handleAttachClick}
                           >
                               <Paperclip size={18} />
                           </button>
                           <button 
-                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-200 rounded-full transition" 
+                              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition" 
                               title="Add Emoji"
                               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                           >
@@ -250,7 +282,7 @@ const CustomerDashboard: React.FC = () => {
                             onChange={e => setNewMessage(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                           />
-                          <button onClick={handleSendMessage} className="bg-primary-600 text-white p-2 rounded-lg hover:bg-primary-700 transition"><ChevronRight size={18} /></button>
+                          <button onClick={handleSendMessage} className="bg-primary-600 text-white p-2 rounded-lg hover:bg-primary-700 transition shadow-sm"><ChevronRight size={18} /></button>
                       </div>
                   </div>
                </div>

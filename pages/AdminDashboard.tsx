@@ -81,6 +81,7 @@ const AdminDashboard: React.FC = () => {
   // Ticket Management
   const [bookingFilter, setBookingFilter] = useState('All');
   const [isAddingBooking, setIsAddingBooking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // New state to prevent double clicking
   const [newBookingData, setNewBookingData] = useState({ name: '', phone: '', email: '', serviceType: '', date: '', time: '', technician: '' });
 
   // Admin Quote Generator State
@@ -232,20 +233,45 @@ const AdminDashboard: React.FC = () => {
        await api.assignTechnician(bookingId, technician, token);
        // Update local state to reflect assignment immediately
        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, technician: technician === 'Unassigned' ? null : technician, taskStatus: 'Assigned', status: b.status === 'Pending' ? 'In Progress' : b.status } : b));
+       alert(`Technician assigned & notified successfully.`);
      } catch (e) {
        alert("Failed to assign technician");
      }
   };
 
+  const handleUserSelectForTicket = (userId: string) => {
+      if (userId === 'new') {
+          setNewBookingData(prev => ({ ...prev, name: '', email: '', phone: '' }));
+          return;
+      }
+      const user = users.find(u => u.id === userId);
+      if (user) {
+          setNewBookingData(prev => ({ 
+              ...prev, 
+              name: user.name, 
+              email: user.email, 
+              phone: user.phone || '' 
+          }));
+      }
+  };
+
   const handleCreateBooking = async () => {
-      if(!newBookingData.name || !newBookingData.serviceType) return;
+      if(!newBookingData.name || !newBookingData.serviceType) {
+          alert("Please fill in Client Name and Job Description");
+          return;
+      }
+      
+      setIsSubmitting(true);
       try {
           const result = await api.createAdminBooking(newBookingData, token);
           if (result.booking) setBookings(prev => [result.booking, ...prev]);
           setNewBookingData({ name: '', phone: '', email: '', serviceType: '', date: '', time: '', technician: '' });
           setIsAddingBooking(false);
+          alert("Ticket created! Notifications sent to Customer & Technician.");
       } catch (e) {
           alert("Failed to create booking");
+      } finally {
+          setIsSubmitting(false);
       }
   };
 
@@ -849,80 +875,98 @@ const AdminDashboard: React.FC = () => {
                                 <UserPlus size={16} className="mr-2" /> Add Technician
                             </Button>
                             <Button onClick={() => setIsAddingBooking(!isAddingBooking)} size="sm">
-                                {isAddingBooking ? "Cancel" : <><Plus size={16} className="mr-2" /> New Ticket</>}
+                                {isAddingBooking ? "Close Form" : <><Plus size={16} className="mr-2" /> Create Job Ticket</>}
                             </Button>
                         </div>
                     </div>
 
-                    {/* Add Technician Modal */}
-                    {isAddingTech && (
-                        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
-                                <h3 className="font-bold text-lg mb-1 text-slate-900 flex items-center gap-2">
-                                    <UserCog className="text-primary-600" /> Register Technician
-                                </h3>
-                                <p className="text-slate-500 text-sm mb-6">Enter details for new service staff member.</p>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className={labelStyle}>Full Name</label>
-                                        <input className={inputStyle} 
-                                            placeholder="e.g., Kwame Osei" 
-                                            value={newTechData.name} 
-                                            onChange={e => setNewTechData({...newTechData, name: e.target.value})} 
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className={labelStyle}>Email Address</label>
-                                        <input className={inputStyle} 
-                                            placeholder="tech@buzzitech.com" 
-                                            value={newTechData.email} 
-                                            onChange={e => setNewTechData({...newTechData, email: e.target.value})} 
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={labelStyle}>Role</label>
-                                            <select 
-                                                className={inputStyle}
-                                                value={newTechData.role}
-                                                onChange={e => setNewTechData({...newTechData, role: e.target.value})}
-                                            >
-                                                {TECH_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className={labelStyle}>Department</label>
-                                            <input className={inputStyle} 
-                                                placeholder="e.g., Infrastructure" 
-                                                value={newTechData.department} 
-                                                onChange={e => setNewTechData({...newTechData, department: e.target.value})} 
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-                                    <button onClick={() => setIsAddingTech(false)} className="flex-1 py-2.5 text-slate-500 hover:bg-slate-50 rounded-lg font-medium transition">Cancel</button>
-                                    <Button onClick={handleAddTechnician} className="flex-1">Register Staff</Button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* New Booking Form */}
                     {isAddingBooking && (
-                        <div className="bg-slate-50 p-4 rounded-xl border mb-4 animate-in slide-in-from-top-2">
-                            <h4 className="font-bold mb-3 text-sm text-slate-800">Create Support Ticket</h4>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <input className={inputStyle} placeholder="Client Name" value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} />
-                                <input className={inputStyle} placeholder="Service Type / Issue" value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} />
-                                <input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
-                                <input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
+                        <div className="bg-white p-6 rounded-xl shadow-lg border border-primary-200 mb-6 animate-in slide-in-from-top-4">
+                            <h4 className="font-bold mb-4 text-lg text-slate-800 border-b pb-2 flex items-center gap-2">
+                                <Briefcase className="text-primary-600" /> Create New Job Ticket
+                            </h4>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Customer Selection */}
+                                <div>
+                                    <label className={labelStyle}>Select Pending User / Client</label>
+                                    <select 
+                                        className={inputStyle} 
+                                        onChange={(e) => handleUserSelectForTicket(e.target.value)}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Choose a customer...</option>
+                                        <option value="new">-- Enter Manually --</option>
+                                        {users.filter(u => u.role === 'customer').map(user => (
+                                            <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Client Name</label>
+                                    <input className={inputStyle} value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} placeholder="Full Name" />
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Contact Email</label>
+                                    <input className={inputStyle} value={newBookingData.email} onChange={e => setNewBookingData({...newBookingData, email: e.target.value})} placeholder="Email Address" />
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Contact Phone</label>
+                                    <input className={inputStyle} value={newBookingData.phone} onChange={e => setNewBookingData({...newBookingData, phone: e.target.value})} placeholder="050..." />
+                                </div>
+
+                                <div className="lg:col-span-2">
+                                    <label className={labelStyle}>Job Description / Service Type</label>
+                                    <textarea 
+                                        className={inputStyle} 
+                                        rows={2}
+                                        placeholder="e.g. Starlink Installation at East Legon, Roof Mounting required." 
+                                        value={newBookingData.serviceType} 
+                                        onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} 
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Schedule Date</label>
+                                    <input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Schedule Time</label>
+                                    <input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
+                                </div>
+
+                                <div>
+                                    <label className={labelStyle}>Assign Technician (Optional)</label>
+                                    <select 
+                                        className={inputStyle}
+                                        value={newBookingData.technician}
+                                        onChange={e => setNewBookingData({...newBookingData, technician: e.target.value})}
+                                    >
+                                        <option value="">-- Unassigned --</option>
+                                        {technicians.map(t => <option key={t.id} value={t.name}>{t.name} ({t.status})</option>)}
+                                    </select>
+                                </div>
                             </div>
-                            <Button onClick={handleCreateBooking} size="sm">Create Ticket</Button>
+
+                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                                <button onClick={() => setIsAddingBooking(false)} className="px-6 py-2 text-slate-500 hover:bg-slate-50 rounded-lg transition">Cancel</button>
+                                <Button onClick={handleCreateBooking} disabled={isSubmitting}>
+                                    {isSubmitting ? "Creating & Notifying..." : "Create Ticket & Notify"}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-center text-slate-400 mt-2">
+                                <CheckCircle size={12} className="inline mr-1" />
+                                Automations: OTP generated, SMS/Email sent to Client & Technician.
+                            </p>
                         </div>
                     )}
 
+                    {/* Tickets Table */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 text-slate-700 text-xs uppercase border-b">
@@ -1027,6 +1071,116 @@ const AdminDashboard: React.FC = () => {
                             </div>
                         ))}
                         {messages.length === 0 && <div className="p-8 text-center text-slate-400">No support tickets found.</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* CHATBOT & AI TAB */}
+            {activeTab === 'chatbot' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800">AI Knowledge Base</h3>
+                            <p className="text-sm text-slate-500">Train the chatbot to answer common questions automatically.</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                                <UploadCloud size={16} /> Import JSON/PDF
+                                <input type="file" className="hidden" onChange={handleKBUpload} accept=".json,.pdf,.docx" />
+                            </label>
+                            <Button onClick={() => setIsAddingKB(!isAddingKB)} size="sm">
+                                {isAddingKB ? "Close Editor" : <><Plus size={16} className="mr-2" /> Add Entry</>}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* KB Editor */}
+                    {isAddingKB && (
+                        <div className="bg-white p-6 rounded-xl shadow-lg border border-primary-200 mb-6 animate-in slide-in-from-top-4">
+                            <h4 className="font-bold text-slate-800 mb-4 border-b pb-2 flex items-center gap-2"><Bot size={18} /> New Knowledge Entry</h4>
+                            
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelStyle}>Category</label>
+                                        <select 
+                                            className={inputStyle}
+                                            value={newKBEntry.category}
+                                            onChange={e => setNewKBEntry({...newKBEntry, category: e.target.value})}
+                                        >
+                                            <option value="general">General Info</option>
+                                            <option value="pricing">Pricing & Services</option>
+                                            <option value="troubleshooting">Troubleshooting</option>
+                                            <option value="support">Support Policies</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelStyle}>Keywords (Comma Separated)</label>
+                                        <input 
+                                            className={inputStyle} 
+                                            placeholder="e.g. price, cost, how much"
+                                            value={kbKeywordsInput}
+                                            onChange={e => setKbKeywordsInput(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>AI Response / Answer</label>
+                                    <textarea 
+                                        className={inputStyle} 
+                                        rows={3}
+                                        placeholder="The AI will respond with this text..."
+                                        value={newKBEntry.answer}
+                                        onChange={e => setNewKBEntry({...newKBEntry, answer: e.target.value})}
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <Button onClick={handleAddKBEntry}>Save Entry</Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Knowledge Base Table */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 text-slate-700 text-xs uppercase border-b">
+                                <tr>
+                                    <th className="p-4 w-1/6">Category</th>
+                                    <th className="p-4 w-1/4">Keywords</th>
+                                    <th className="p-4">Response</th>
+                                    <th className="p-4 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm divide-y divide-gray-100">
+                                {knowledgeBase.map(entry => (
+                                    <tr key={entry.id} className="hover:bg-slate-50">
+                                        <td className="p-4">
+                                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold uppercase">{entry.category}</span>
+                                        </td>
+                                        <td className="p-4 text-slate-500 italic">
+                                            {entry.keywords.join(", ")}
+                                        </td>
+                                        <td className="p-4 text-slate-800 whitespace-pre-wrap">
+                                            {entry.answer.length > 100 ? entry.answer.substring(0, 100) + "..." : entry.answer}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button 
+                                                onClick={() => handleDeleteKBEntry(entry.id)}
+                                                className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded transition"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {knowledgeBase.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="p-8 text-center text-slate-400">Knowledge base is empty. Add entries to train the AI.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}

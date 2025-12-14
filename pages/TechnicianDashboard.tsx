@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, CheckCircle, Clock, Star, LogOut, MapPin, Calendar, Monitor, Video, MessageSquare } from 'lucide-react';
+import { Wrench, CheckCircle, Clock, Star, LogOut, MapPin, Calendar, Monitor, Video, MessageSquare, Send, X, AlertCircle, Key } from 'lucide-react';
 import { api } from '../services/api';
 import Logo from '../components/Logo';
 import { Meeting, ChatMessage } from '../types';
@@ -17,6 +17,12 @@ const TechnicianDashboard: React.FC = () => {
   const [showRemoteModal, setShowRemoteModal] = useState(false);
   const [remoteId, setRemoteId] = useState("");
   const [newMessage, setNewMessage] = useState("");
+  
+  // Task Details & Completion Logic
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifyError, setVerifyError] = useState("");
 
   useEffect(() => {
     const storedTech = localStorage.getItem('techUser');
@@ -92,6 +98,37 @@ const TechnicianDashboard: React.FC = () => {
       const res = await api.sendInternalMessage(tech.id || 'tech', tech.name, newMessage, undefined, 'technician');
       setChats(prev => [...prev, res.message]);
       setNewMessage("");
+  };
+
+  const initiateCompletion = (task: any) => {
+      setSelectedTask(task);
+      setShowVerifyModal(true);
+      setVerificationCode("");
+      setVerifyError("");
+  };
+
+  const handleVerifyAndComplete = async () => {
+      if (!verificationCode || !selectedTask) return;
+      
+      try {
+          // Call API to verify code and update
+          await api.verifyJobCompletion(selectedTask.id, verificationCode);
+          
+          alert("Success! Job completed and confirmation sent.");
+          
+          // Update Local State
+          setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, status: 'Completed' } : t));
+          if (selectedTask) setSelectedTask({ ...selectedTask, status: 'Completed' });
+          
+          setShowVerifyModal(false);
+          setVerificationCode("");
+      } catch (e: any) {
+          setVerifyError(e.message || "Invalid Code. Please ask the customer.");
+      }
+  };
+
+  const handleViewDetails = (task: any) => {
+      setSelectedTask(task);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">Loading Portal...</div>;
@@ -182,15 +219,20 @@ const TechnicianDashboard: React.FC = () => {
                           </div>
                       ))}
                   </div>
-                  <div className="flex gap-2">
-                      <input 
-                          className="flex-grow border rounded px-3 py-1.5 text-sm" 
-                          placeholder="Update status..." 
-                          value={newMessage}
-                          onChange={e => setNewMessage(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                      />
-                      <button onClick={handleSendMessage} className="bg-blue-600 text-white px-4 rounded text-sm">Send</button>
+                  <div className="flex gap-2 mt-2">
+                      <div className="flex-grow flex items-center bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all shadow-sm">
+                          <input 
+                              className="flex-grow bg-transparent border-none text-sm focus:ring-0 text-slate-900 placeholder:text-slate-400 outline-none" 
+                              placeholder="Type a message..." 
+                              value={newMessage}
+                              onChange={e => setNewMessage(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                          />
+                      </div>
+                      <button onClick={handleSendMessage} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-sm flex items-center gap-2">
+                          <span>Send</span>
+                          <Send size={16} />
+                      </button>
                   </div>
               </div>
 
@@ -202,10 +244,13 @@ const TechnicianDashboard: React.FC = () => {
                  ) : (
                      tasks.map(task => (
                         <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:border-primary-300 transition-colors relative overflow-hidden">
-                           <div className="absolute top-0 left-0 w-1 h-full bg-primary-500"></div>
+                           <div className={`absolute top-0 left-0 w-1 h-full ${task.status === 'Completed' ? 'bg-green-500' : 'bg-primary-500'}`}></div>
                            <div className="flex justify-between items-start mb-3">
                               <span className="font-mono text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded">{task.id}</span>
-                              <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded flex items-center gap-1"><Clock size={12} /> {task.status}</span>
+                              <span className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${task.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-orange-50 text-orange-600'}`}>
+                                  {task.status === 'Completed' ? <CheckCircle size={12} /> : <Clock size={12} />} 
+                                  {task.status}
+                              </span>
                            </div>
                            <h3 className="font-bold text-lg text-slate-900 mb-1">{task.type}</h3>
                            <p className="text-slate-600 text-sm mb-4">{task.client}</p>
@@ -216,8 +261,10 @@ const TechnicianDashboard: React.FC = () => {
                            </div>
 
                            <div className="flex gap-2 mt-4">
-                              <button className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium transition">Mark Complete</button>
-                              <button className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium transition">Details</button>
+                              {task.status !== 'Completed' && (
+                                  <button onClick={() => initiateCompletion(task)} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium transition">Mark Complete</button>
+                              )}
+                              <button onClick={() => handleViewDetails(task)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium transition">Details</button>
                            </div>
                         </div>
                      ))
@@ -247,6 +294,117 @@ const TechnicianDashboard: React.FC = () => {
                         <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-bold transition">TeamViewer</button>
                     </div>
                     <button onClick={() => setShowRemoteModal(false)} className="w-full text-slate-500 hover:text-slate-800 text-sm">Cancel</button>
+                </div>
+            </div>
+        )}
+
+        {/* TASK DETAILS MODAL */}
+        {selectedTask && !showVerifyModal && (
+            <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200 relative">
+                    <button onClick={() => setSelectedTask(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                        <X size={20} />
+                    </button>
+                    
+                    <div className="mb-6">
+                        <span className="font-mono text-xs text-slate-400 uppercase tracking-wide">Work Order #{selectedTask.id}</span>
+                        <h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedTask.type}</h2>
+                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded mt-2 ${selectedTask.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {selectedTask.status}
+                        </span>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex gap-3 items-start p-3 bg-slate-50 rounded-lg">
+                            <Wrench className="text-slate-400 mt-1" size={18} />
+                            <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">Client</p>
+                                <p className="font-medium text-slate-900">{selectedTask.client}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 items-start p-3 bg-slate-50 rounded-lg">
+                            <MapPin className="text-slate-400 mt-1" size={18} />
+                            <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">Location</p>
+                                <p className="font-medium text-slate-900">
+                                    {/* Mock address expansion for demo */}
+                                    {selectedTask.address === 'See Details' ? '12 Independence Ave, Accra (Near Ridge Hospital)' : selectedTask.address}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 items-start p-3 bg-slate-50 rounded-lg">
+                            <Clock className="text-slate-400 mt-1" size={18} />
+                            <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">Schedule</p>
+                                <p className="font-medium text-slate-900">{selectedTask.date} at {selectedTask.time}</p>
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                            <p className="text-xs font-bold text-blue-500 uppercase mb-1 flex items-center gap-1">
+                                <AlertCircle size={12} /> Notes
+                            </p>
+                            <p className="text-sm text-blue-900">
+                                Please ensure client signs off on the installation form upon completion. Take photos of the installed equipment.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                        <button onClick={() => setSelectedTask(null)} className="flex-1 py-3 text-slate-500 hover:bg-slate-50 rounded-lg font-medium">Close</button>
+                        {selectedTask.status !== 'Completed' && (
+                            <button onClick={() => { setSelectedTask(null); initiateCompletion(selectedTask); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium shadow-sm transition">
+                                Complete Task
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* VERIFICATION MODAL */}
+        {showVerifyModal && selectedTask && (
+            <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2 text-center">Verify Completion</h3>
+                    <p className="text-sm text-slate-500 text-center mb-6">
+                        Ask the customer for the 4-digit <strong>Completion Code</strong> from their dashboard to sign off.
+                    </p>
+
+                    <div className="flex justify-center mb-6">
+                        <input 
+                            type="text" 
+                            maxLength={4}
+                            placeholder="0 0 0 0"
+                            className="w-48 text-center text-3xl font-mono tracking-[0.5em] border-b-2 border-slate-300 focus:border-green-500 outline-none py-2 bg-transparent text-slate-900"
+                            value={verificationCode}
+                            onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, ''))}
+                        />
+                    </div>
+
+                    {verifyError && (
+                        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center mb-4 flex items-center justify-center gap-2">
+                            <AlertCircle size={16} /> {verifyError}
+                        </div>
+                    )}
+
+                    <div className="space-y-3">
+                        <button 
+                            onClick={handleVerifyAndComplete}
+                            disabled={verificationCode.length !== 4}
+                            className="w-full bg-green-600 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-lg transition-all flex items-center justify-center gap-2"
+                        >
+                            <Key size={18} /> Verify & Finish Job
+                        </button>
+                        <button 
+                            onClick={() => setShowVerifyModal(false)}
+                            className="w-full text-slate-500 hover:text-slate-800 text-sm py-2"
+                        >
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         )}

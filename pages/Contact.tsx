@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Send, ChevronDown, Ticket, CheckCircle, Upload, X } from 'lucide-react';
 import Button from '../components/Button';
 import { SERVICES, COMPANY_INFO } from '../constants';
@@ -18,6 +18,24 @@ const Contact: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check for logged in customer to pre-fill data
+    const storedUser = localStorage.getItem('customerUser');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setFormData(prev => ({
+          ...prev,
+          name: user.name || prev.name,
+          email: user.email || prev.email,
+          phone: user.phone || prev.phone
+        }));
+      } catch (e) {
+        console.error("Failed to load user data", e);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

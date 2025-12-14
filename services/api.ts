@@ -55,6 +55,12 @@ const sendToExternal = async (data: any, formType: string) => {
   }
 };
 
+// Helper: Simulate SMS/Email Notification
+const notifyUser = async (recipient: string, type: 'email' | 'sms', message: string) => {
+    console.log(`[Notification System] Sending ${type.toUpperCase()} to ${recipient}: ${message}`);
+    // In a real app, this would call an SMS gateway (Twilio/Hubtel) or SMTP service
+};
+
 // Mock Data Stores for Demo
 let MOCK_TECHNICIANS: Technician[] = [
   { 
@@ -119,7 +125,7 @@ let MOCK_QUOTES: QuoteFormData[] = [
     }
 ];
 
-// Mock Bookings Data
+// Mock Bookings Data with Completion Codes
 let MOCK_BOOKINGS = [
   {
      id: 'bk-1',
@@ -132,6 +138,7 @@ let MOCK_BOOKINGS = [
      status: 'Completed',
      technician: 'Kwame Osei', 
      taskStatus: 'Done',
+     completionCode: '8842',
      rating: 5,
      workDone: 'Mounted dish on roof, routed cable through attic, set up router. Speed test: 150Mbps.',
      customerFeedback: 'Excellent service, very neat work.'
@@ -145,8 +152,23 @@ let MOCK_BOOKINGS = [
      date: '2023-11-22',
      time: '10:00',
      status: 'Pending',
-     technician: null,
-     taskStatus: 'Unassigned',
+     technician: 'Kwame Osei',
+     taskStatus: 'Pending',
+     completionCode: '9021',
+     rating: null
+  },
+  {
+     id: 'bk-3',
+     name: 'Robert Ansah',
+     email: 'robert@yahoo.com',
+     phone: '0204938271',
+     serviceType: 'Network Cabling',
+     date: '2023-11-25',
+     time: '09:00',
+     status: 'In Progress',
+     technician: 'Kwame Osei',
+     taskStatus: 'In Progress',
+     completionCode: '3356',
      rating: null
   }
 ];
@@ -198,7 +220,8 @@ let MOCK_CHATS: ChatMessage[] = [
 ];
 
 let MOCK_MEETINGS: Meeting[] = [
-    { id: 'm1', title: 'Starlink Consultation', platform: 'Zoom', link: 'https://zoom.us/j/123456789', date: '2023-12-01', time: '10:00', attendees: ['john@gmail.com'], status: 'Scheduled' }
+    { id: 'm1', title: 'Starlink Consultation', platform: 'Zoom', link: 'https://zoom.us/j/123456789', date: '2023-12-01', time: '10:00', attendees: ['john@gmail.com'], status: 'Scheduled' },
+    { id: 'm2', title: 'Project Review', platform: 'Teams', link: 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_MjA...', date: '2023-12-02', time: '14:30', attendees: ['kwame@buzzitech.com'], status: 'Scheduled' }
 ];
 
 export const api = {
@@ -259,6 +282,7 @@ export const api = {
         status: 'Pending',
         technician: null,
         taskStatus: 'Unassigned',
+        completionCode: Math.floor(1000 + Math.random() * 9000).toString(),
         rating: null,
         workDone: undefined,
         customerFeedback: undefined
@@ -502,6 +526,10 @@ export const api = {
      return MOCK_MESSAGES.filter(m => m.email === email);
   },
 
+  getCustomerBookings: async (email: string) => {
+     return MOCK_BOOKINGS.filter(b => b.email === email);
+  },
+
   submitRating: async (technicianName: string, rating: number, feedback: string) => {
      const tech = MOCK_TECHNICIANS.find(t => t.name === technicianName);
      if (tech) {
@@ -520,16 +548,46 @@ export const api = {
          address: 'See Details', 
          date: b.date,
          time: b.time,
-         status: b.status
+         status: b.taskStatus || b.status
      }));
      
      if (techBookings.length === 0) {
-         return [
-            { id: 'TSK-1', type: 'Installation', client: 'John Doe', address: 'East Legon', date: '2023-11-28', time: '10:00 AM', status: 'Pending' },
-            { id: 'TSK-2', type: 'Repair', client: 'Alice Smith', address: 'Osu', date: '2023-11-29', time: '2:00 PM', status: 'Scheduled' }
-         ];
+         // Return empty if no real bookings to avoid confusion
+         return [];
      }
      return techBookings;
+  },
+
+  // NEW: Verify Code and Update Status
+  verifyJobCompletion: async (taskId: string, code: string) => {
+      const task = MOCK_BOOKINGS.find(b => b.id === taskId);
+      
+      if (!task) throw new Error("Task not found");
+      
+      if (task.completionCode !== code) {
+          throw new Error("Invalid Code");
+      }
+
+      // Update status
+      task.taskStatus = 'Completed';
+      task.status = 'Completed';
+
+      // Send completion email mock
+      await sendToExternal({
+          recipient: task.email,
+          subject: `Job Completed: ${task.serviceType}`,
+          message: `Your service for ${task.serviceType} has been marked as complete by ${task.technician}. Thank you for choosing Buzzitech.`
+      }, 'Job Completion Notification');
+
+      // Also notify technician (simulated)
+      console.log(`Completion email sent to technician for task ${taskId}`);
+
+      return { success: true };
+  },
+
+  updateTaskStatus: async (taskId: string, status: string) => {
+      MOCK_BOOKINGS = MOCK_BOOKINGS.map(b => b.id === taskId ? { ...b, taskStatus: status, status: status === 'Completed' ? 'Completed' : b.status } : b);
+      return { success: true };
   },
 
   // --- ADMIN DATA ---
@@ -584,27 +642,63 @@ export const api = {
   },
 
   createAdminBooking: async (data: any, token: string) => {
+      // Generate OTP Code
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      
       const newBooking = {
           id: `bk-man-${Date.now()}`,
           name: data.name,
           email: data.email || 'N/A',
           phone: data.phone,
-          serviceType: data.serviceType,
+          serviceType: data.serviceType, // Job Description
           date: data.date,
           time: data.time,
           status: 'Pending',
           technician: data.technician || null,
           taskStatus: 'Assigned',
+          completionCode: code,
           rating: null,
           workDone: undefined,
           customerFeedback: undefined
       };
+      
       MOCK_BOOKINGS.unshift(newBooking);
+
+      // --- SIMULATED NOTIFICATIONS ---
+      
+      // 1. Notify Customer (SMS & Email)
+      const customerMsg = `New Service Ticket: ${data.serviceType}. Tech: ${data.technician || 'Pending'}. Completion Code: ${code} (Give this to tech after job).`;
+      await notifyUser(data.email, 'email', customerMsg);
+      await notifyUser(data.phone, 'sms', customerMsg);
+
+      // 2. Notify Technician (if assigned)
+      if (data.technician) {
+          const tech = MOCK_TECHNICIANS.find(t => t.name === data.technician);
+          if (tech && tech.email) {
+              const techMsg = `New Job Assigned: ${data.serviceType} for ${data.name}. Location: See details.`;
+              await notifyUser(tech.email, 'email', techMsg);
+              // Assume tech has phone
+              await notifyUser('050XXXXXXX', 'sms', techMsg);
+          }
+      }
+
       return { success: true, booking: newBooking };
   },
 
   assignTechnician: async (bookingId: string, technicianName: string, token: string) => {
-      MOCK_BOOKINGS = MOCK_BOOKINGS.map(b => b.id === bookingId ? { ...b, technician: technicianName } : b);
+      const booking = MOCK_BOOKINGS.find(b => b.id === bookingId);
+      if (booking) {
+          booking.technician = technicianName;
+          booking.taskStatus = 'Assigned';
+          booking.status = 'In Progress';
+
+          // Notify Technician
+          const tech = MOCK_TECHNICIANS.find(t => t.name === technicianName);
+          if (tech && tech.email) {
+              const msg = `Job Assignment: ${booking.serviceType} for ${booking.name}.`;
+              await notifyUser(tech.email, 'email', msg);
+          }
+      }
       return { success: true };
   },
 

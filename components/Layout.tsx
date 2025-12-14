@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart, Lock, User } from 'lucide-react';
+import { Menu, X, Phone, Mail, Facebook, Twitter, Linkedin, Instagram, ShoppingCart, Lock, User, LayoutDashboard } from 'lucide-react';
 import { COMPANY_INFO } from '../constants';
 import ChatWidget from './ChatWidget';
 import Logo from './Logo';
@@ -12,6 +12,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [customLogo, setCustomLogo] = useState<string | null>(null);
+  
+  // Auth State
+  const [userSession, setUserSession] = useState<{ type: 'admin' | 'tech' | 'customer', name: string } | null>(null);
+
   const location = useLocation();
   const { totalItems, lastAdded } = useCart();
   
@@ -41,8 +45,25 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Check Auth State on Route Change
   useEffect(() => {
     setIsMenuOpen(false);
+    
+    const adminToken = localStorage.getItem('adminToken');
+    const techToken = localStorage.getItem('techToken');
+    const custToken = localStorage.getItem('customerToken');
+
+    if (adminToken) {
+        setUserSession({ type: 'admin', name: 'Admin' });
+    } else if (techToken) {
+        setUserSession({ type: 'tech', name: 'Technician' });
+    } else if (custToken) {
+        const user = JSON.parse(localStorage.getItem('customerUser') || '{}');
+        setUserSession({ type: 'customer', name: user.name || 'Account' });
+    } else {
+        setUserSession(null);
+    }
+
   }, [location]);
 
   // Trigger "Bump" animation when an item is added
@@ -93,6 +114,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
     );
   }
+
+  const getDashboardLink = () => {
+      switch(userSession?.type) {
+          case 'admin': return '/admin/dashboard';
+          case 'tech': return '/technician';
+          case 'customer': return '/dashboard';
+          default: return '/login';
+      }
+  };
 
   return (
     <div className="flex flex-col min-h-screen relative">
@@ -160,12 +190,23 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 )}
               </Link>
 
-              <Link
-                to="/login"
-                className={`flex items-center gap-1 text-sm font-medium transition-colors ${headerTextColorClass}`}
-              >
-                <User size={18} /> Login
-              </Link>
+              {userSession ? (
+                  <Link
+                    to={getDashboardLink()}
+                    className={`flex items-center gap-1 text-sm font-bold transition-colors ${
+                        isScrolled || isLightPage ? 'text-primary-600 hover:text-primary-800' : 'text-brand-yellow hover:text-white'
+                    }`}
+                  >
+                    <LayoutDashboard size={18} /> {userSession.type === 'customer' ? 'My Dashboard' : 'Portal'}
+                  </Link>
+              ) : (
+                  <Link
+                    to="/login"
+                    className={`flex items-center gap-1 text-sm font-medium transition-colors ${headerTextColorClass}`}
+                  >
+                    <User size={18} /> Login
+                  </Link>
+              )}
 
               <Link
                 to="/quote"
@@ -220,12 +261,23 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   {link.name}
                 </Link>
               ))}
-              <Link
-                to="/login"
-                className="block px-3 py-3 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              >
-                Customer / Tech Login
-              </Link>
+              
+              {userSession ? (
+                  <Link
+                    to={getDashboardLink()}
+                    className="block px-3 py-3 rounded-md text-base font-bold text-primary-600 bg-primary-50 hover:bg-primary-100"
+                  >
+                    Go to {userSession.type === 'customer' ? 'Dashboard' : 'Portal'}
+                  </Link>
+              ) : (
+                  <Link
+                    to="/login"
+                    className="block px-3 py-3 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  >
+                    Login
+                  </Link>
+              )}
+
               <Link
                 to="/quote"
                 className="block w-full text-center mt-4 px-4 py-3 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700"
@@ -306,8 +358,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
             <p>&copy; {new Date().getFullYear()} Buzzitech IT Solutions & Services. All rights reserved.</p>
             <div className="flex gap-4 mt-4 md:mt-0">
-               <Link to="/login" className="hover:text-white transition">Staff Login</Link>
-               <Link to="/admin" className="hover:text-white transition">Admin Portal</Link>
+               {userSession ? (
+                   <span className="text-slate-400">Logged in as {userSession.name}</span>
+               ) : (
+                   <>
+                       <Link to="/login" className="hover:text-white transition">Staff Login</Link>
+                       <Link to="/admin" className="hover:text-white transition">Admin Portal</Link>
+                   </>
+               )}
             </div>
           </div>
         </div>
