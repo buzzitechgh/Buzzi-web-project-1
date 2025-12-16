@@ -5,7 +5,9 @@ const Product = require('../models/Product');
 // @access  Public
 const getProducts = async (req, res) => {
   try {
-    const products = await Product.find({ isActive: true });
+    // Return all products. Frontend Store component filters by isActive=true, 
+    // while Admin Dashboard needs to see everything.
+    const products = await Product.find({});
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Server Error' });
@@ -32,7 +34,7 @@ const getProductById = async (req, res) => {
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = async (req, res) => {
-  const { id, name, price, category, image, description, features, stock } = req.body;
+  const { id, name, brand, price, originalPrice, category, image, description, features, stock, isActive } = req.body;
 
   const productExists = await Product.findOne({ id });
   if (productExists) {
@@ -41,7 +43,7 @@ const createProduct = async (req, res) => {
   }
 
   const product = await Product.create({
-    id, name, price, category, image, description, features, stock
+    id, name, brand, price, originalPrice, category, image, description, features, stock, isActive
   });
 
   if (product) {
@@ -59,11 +61,15 @@ const updateProduct = async (req, res) => {
 
   if (product) {
     product.name = req.body.name || product.name;
-    product.price = req.body.price || product.price;
-    product.description = req.body.description || product.description;
-    product.image = req.body.image || product.image;
+    product.brand = req.body.brand !== undefined ? req.body.brand : product.brand;
+    product.price = req.body.price !== undefined ? req.body.price : product.price;
+    product.originalPrice = req.body.originalPrice !== undefined ? req.body.originalPrice : product.originalPrice;
     product.category = req.body.category || product.category;
-    product.stock = req.body.stock || product.stock;
+    product.image = req.body.image || product.image;
+    product.description = req.body.description || product.description;
+    product.features = req.body.features || product.features;
+    product.stock = req.body.stock !== undefined ? req.body.stock : product.stock;
+    product.isActive = req.body.isActive !== undefined ? req.body.isActive : product.isActive;
 
     const updatedProduct = await product.save();
     res.json(updatedProduct);
@@ -72,4 +78,18 @@ const updateProduct = async (req, res) => {
   }
 };
 
-module.exports = { getProducts, getProductById, createProduct, updateProduct };
+// @desc    Delete product
+// @route   DELETE /api/products/:id
+// @access  Private/Admin
+const deleteProduct = async (req, res) => {
+  const product = await Product.findOne({ id: req.params.id });
+
+  if (product) {
+    await product.deleteOne();
+    res.json({ message: 'Product removed' });
+  } else {
+    res.status(404).json({ message: 'Product not found' });
+  }
+};
+
+module.exports = { getProducts, getProductById, createProduct, updateProduct, deleteProduct };

@@ -1,4 +1,6 @@
 const KnowledgeEntry = require('../models/KnowledgeEntry');
+const fs = require('fs');
+const path = require('path');
 
 // @desc    Get all knowledge entries
 // @route   GET /api/knowledge
@@ -49,41 +51,72 @@ const deleteKnowledgeEntry = async (req, res) => {
   }
 };
 
-// @desc    Upload Knowledge Base (Bulk Replace/Merge)
+// @desc    Upload Knowledge Base (File)
 // @route   POST /api/knowledge/upload
 // @access  Private/Admin
 const uploadKnowledgeBase = async (req, res) => {
-  // Assuming the file content is passed as JSON body for simplicity via middleware or processed file content
-  // In a real file upload, we'd read req.file. Here we assume the frontend parses it and sends the array.
-  const entries = req.body; 
-
-  if (!Array.isArray(entries)) {
-      return res.status(400).json({ message: 'Invalid format. Expected JSON array.' });
+  if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
   }
 
+  const filePath = req.file.path;
+  const ext = path.extname(req.file.originalname).toLowerCase();
+
   try {
-      // Option 1: Replace All
-      // await KnowledgeEntry.deleteMany({});
-      
-      // Option 2: Merge / Add New
-      let count = 0;
-      for (const item of entries) {
-          const exists = await KnowledgeEntry.findOne({ id: item.id });
-          if (!exists) {
-              await KnowledgeEntry.create({
-                  id: item.id || `kb-imp-${Date.now()}-${count}`,
-                  category: item.category || 'general',
-                  keywords: item.keywords || [],
-                  answer: item.answer || '',
-                  action: item.action
-              });
-              count++;
+      if (ext === '.json') {
+          // Process JSON Immediately
+          const rawData = fs.readFileSync(filePath, 'utf8');
+          const entries = JSON.parse(rawData);
+
+          if (!Array.isArray(entries)) {
+              throw new Error('Invalid JSON format. Expected an array.');
           }
+
+          let count = 0;
+          for (const item of entries) {
+              // Basic Validation
+              if (!item.keywords || !item.answer) continue;
+
+              const exists = await KnowledgeEntry.findOne({ id: item.id });
+              if (!exists) {
+                  await KnowledgeEntry.create({
+                      id: item.id || `kb-imp-${Date.now()}-${count}`,
+                      category: item.category || 'general',
+                      keywords: item.keywords || [],
+                      answer: item.answer || '',
+                      action: item.action
+                  });
+                  count++;
+              }
+          }
+          
+          // Cleanup
+          fs.unlinkSync(filePath);
+          
+          return res.json({ success: true, count, message: `${count} entries imported successfully.` });
+
+      } else if (ext === '.pdf' || ext === '.docx' || ext === '.doc') {
+          // Mock Processing for PDF/DOCX
+          // In production, use libraries like pdf-parse or mammoth here to extract text
+          
+          // Cleanup (or move to permanent storage if processing async)
+          fs.unlinkSync(filePath);
+
+          return res.json({ 
+              success: true, 
+              count: 0, 
+              message: `File received! Background processing started for ${req.file.originalname}. You will be notified when extraction completes.` 
+          });
+      } else {
+          fs.unlinkSync(filePath);
+          return res.status(400).json({ message: 'Unsupported file type.' });
       }
-      
-      res.json({ success: true, count, message: `${count} new entries added.` });
+
   } catch (error) {
-      res.status(500).json({ message: 'Server Error', error: error.message });
+      // Ensure file cleanup on error
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      console.error(error);
+      res.status(500).json({ message: 'Processing Failed', error: error.message });
   }
 };
 

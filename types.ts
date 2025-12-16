@@ -91,6 +91,7 @@ export interface Product {
   description: string;
   features: string[];
   stock: number;
+  isActive?: boolean;
 }
 
 export interface CartItem extends Product {
@@ -163,6 +164,7 @@ export interface User {
   lastLogin?: string;
   ipAddress?: string;
   location?: string;
+  isApproved?: boolean; // Added for technician approval
 }
 
 export interface LoginLog {

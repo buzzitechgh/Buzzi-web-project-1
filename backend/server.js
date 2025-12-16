@@ -13,7 +13,8 @@ const orderRoutes = require('./routes/orderRoutes');
 const formRoutes = require('./routes/formRoutes');
 const authRoutes = require('./routes/authRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
-const knowledgeRoutes = require('./routes/knowledgeRoutes'); // Imported
+const knowledgeRoutes = require('./routes/knowledgeRoutes');
+const adminRoutes = require('./routes/adminRoutes'); // Imported
 
 const app = express();
 
@@ -22,32 +23,54 @@ connectDB();
 
 // 2. Security & Middleware
 app.use(helmet()); // Secure Headers
+
+// Allow requests from typical local development ports and IPs
+const allowedOrigins = [
+  'http://localhost:5173', 
+  'http://localhost:5174', 
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:3000',
+  process.env.CLIENT_URL
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' })); // Increased limit for JSON uploads
-app.use(morgan('dev')); // Logging
 
-// Rate Limiting for Public APIs (Prevent Abuse)
+app.use(express.json({ limit: '10mb' }));
+app.use(morgan('dev'));
+
+// Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, 
+  max: 100, 
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api', limiter);
 
-// 3. Static Folder for Uploaded Images
-const uploadsPath = path.join(__dirname, 'uploads');
-app.use('/uploads', express.static(uploadsPath));
+// 3. Static Folder
+const imagesPath = path.join(__dirname, 'images');
+app.use('/images', express.static(imagesPath));
 
 // 4. Routes
-app.use('/api/products', productRoutes); // Store Products
-app.use('/api/orders', orderRoutes);     // Checkout/Orders
-app.use('/api/forms', formRoutes);       // Contact, Booking, Quote
-app.use('/api/auth', authRoutes);        // Admin Login
-app.use('/api/upload', uploadRoutes);    // Image Uploads
-app.use('/api/knowledge', knowledgeRoutes); // Chatbot Knowledge Base
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/forms', formRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
+app.use('/api/admin', adminRoutes); // Mounted Admin Routes
 
 // 5. Global Error Handler
 app.use((err, req, res, next) => {

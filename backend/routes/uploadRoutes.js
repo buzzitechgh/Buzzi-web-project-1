@@ -4,15 +4,16 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../uploads');
+// Ensure 'images' directory exists
+const uploadDir = path.join(__dirname, '../images');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
     destination(req, file, cb) {
-        cb(null, 'uploads/');
+        // Save to the 'images' folder
+        cb(null, 'images/');
     },
     filename(req, file, cb) {
         cb(null, `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
@@ -44,10 +45,8 @@ router.post('/', upload.single('image'), (req, res) => {
         return res.status(400).send({ message: 'No file uploaded' });
     }
     
-    // Construct full URL (Assuming hosted at root or similar)
-    // For local dev, using simple relative path. 
-    // In production, you might prepend domain if serving separately.
-    const imagePath = `/uploads/${req.file.filename}`;
+    // Construct URL path pointing to the new /images static route
+    const imagePath = `/images/${req.file.filename}`;
     
     res.send({
         message: 'Image uploaded successfully',

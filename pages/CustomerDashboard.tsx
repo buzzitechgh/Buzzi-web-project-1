@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck } from 'lucide-react';
+import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
 import { ChatMessage, Meeting } from '../types';
@@ -96,6 +96,19 @@ const CustomerDashboard: React.FC = () => {
       if (file) {
           setNewMessage(prev => prev + ` [Attachment: ${file.name}] `);
           e.target.value = ''; // Reset
+      }
+  };
+
+  const handleToggle2FA = async () => {
+      if (!confirm(`Are you sure you want to ${user.isTwoFactorEnabled ? 'disable' : 'enable'} Two-Factor Authentication?`)) return;
+      try {
+          const res = await api.toggleTwoFactor();
+          const updatedUser = { ...user, isTwoFactorEnabled: res.isTwoFactorEnabled };
+          setUser(updatedUser);
+          localStorage.setItem('customerUser', JSON.stringify(updatedUser));
+          alert(res.message);
+      } catch (e) {
+          alert("Failed to update security settings.");
       }
   };
 
@@ -228,9 +241,39 @@ const CustomerDashboard: React.FC = () => {
                </div>
            </div>
 
-           {/* Column 2: Support & Communication */}
+           {/* Column 2: Support, Settings & Communication */}
            <div className="space-y-8">
                
+               {/* Account Security Settings */}
+               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                       <ShieldCheck className="text-green-600" /> Security
+                   </h2>
+                   <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                       <div className="flex items-center gap-3">
+                           <div className={`p-2 rounded-full ${user.isTwoFactorEnabled ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>
+                               {user.isTwoFactorEnabled ? <Lock size={18} /> : <Unlock size={18} />}
+                           </div>
+                           <div>
+                               <p className="text-sm font-bold text-slate-800">Two-Factor Authentication</p>
+                               <p className="text-xs text-slate-500">Require email code for login</p>
+                           </div>
+                       </div>
+                       <div className="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                           <input 
+                               type="checkbox" 
+                               name="toggle" 
+                               id="toggle" 
+                               className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300"
+                               style={{ right: user.isTwoFactorEnabled ? '0' : '50%', borderColor: user.isTwoFactorEnabled ? '#22c55e' : '#cbd5e1' }}
+                               checked={user.isTwoFactorEnabled || false}
+                               onChange={handleToggle2FA}
+                           />
+                           <label htmlFor="toggle" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${user.isTwoFactorEnabled ? 'bg-green-500' : 'bg-slate-300'}`}></label>
+                       </div>
+                   </div>
+               </div>
+
                {/* Live Chat */}
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col h-[400px]">
                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">

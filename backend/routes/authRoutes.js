@@ -1,27 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
-const jwt = require('jsonwebtoken');
+const { registerUser, loginUser, verifyEmail, verifyTwoFactorLogin, resendOtp, toggleTwoFactor, approveUser } = require('../controllers/authController');
+const { protect, admin } = require('../middleware/authMiddleware');
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-};
-
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
-
-  if (user && (await user.matchPassword(password))) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
-    });
-  } else {
-    res.status(401).json({ message: 'Invalid email or password' });
-  }
-});
+router.post('/register', registerUser);
+router.post('/login', loginUser);
+router.post('/verify', verifyEmail);
+router.post('/verify-2fa', verifyTwoFactorLogin);
+router.post('/resend-otp', resendOtp);
+router.put('/toggle-2fa', protect, toggleTwoFactor);
+router.put('/approve/:id', protect, admin, approveUser);
 
 module.exports = router;
