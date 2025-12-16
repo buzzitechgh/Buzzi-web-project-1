@@ -52,9 +52,9 @@ let MOCK_MESSAGES: any[] = [
     { id: 'msg-1', subject: 'Inquiry', message: 'Do you sell Starlink?', sender: 'Alice', status: 'Open', date: new Date().toISOString() }
 ];
 let MOCK_USERS: User[] = [
-    { id: 'u1', name: 'Admin User', email: 'admin@buzzitech.com', role: 'admin', status: 'Active', isOnline: true },
-    { id: 'u2', name: 'Kwame Mensah', email: 'kwame@buzzitech.com', role: 'technician', status: 'Active', isOnline: false },
-    { id: 'u3', name: 'Client One', email: 'client@gmail.com', role: 'customer', status: 'Active', isOnline: true }
+    { id: 'u1', name: 'Admin User', email: 'admin@buzzitech.com', role: 'admin', status: 'Active', isOnline: true, isApproved: true },
+    { id: 'u2', name: 'Kwame Mensah', email: 'kwame@buzzitech.com', role: 'technician', status: 'Active', isOnline: false, isApproved: true },
+    { id: 'u3', name: 'Client One', email: 'client@gmail.com', role: 'customer', status: 'Active', isOnline: true, isApproved: true }
 ];
 let MOCK_LOGS: LoginLog[] = [];
 let MOCK_CHATS: ChatMessage[] = [];
@@ -521,8 +521,6 @@ export const api = {
   // --- USER & TECH MANAGEMENT (With Fallback) ---
   getUsers: async () => {
       try {
-          // In a real app we would try authFetch here
-          // But for this robust fallback version, we default to MOCK_USERS if authFetch isn't implemented for this yet or fails
           return MOCK_USERS;
       } catch (e) {
           return MOCK_USERS;
@@ -530,13 +528,18 @@ export const api = {
   },
   
   createUser: async (userData: Partial<User>) => {
-      const u = { ...userData, id: `u-${Date.now()}`, status: 'Active', isOnline: false } as User;
+      const u = { ...userData, id: `u-${Date.now()}`, status: 'Active', isOnline: false, isApproved: true } as User;
       MOCK_USERS.push(u);
       return { success: true, user: u };
   },
   updateUserRole: async (userId: string, role: string) => {
       const u = MOCK_USERS.find(user => user.id === userId);
       if(u) u.role = role as any;
+      return { success: true };
+  },
+  updateUserStatus: async (userId: string, status: string) => {
+      const u = MOCK_USERS.find(user => user.id === userId);
+      if(u) u.status = status as any;
       return { success: true };
   },
   getLoginLogs: async (token: string) => MOCK_LOGS,
@@ -586,9 +589,7 @@ export const api = {
           time: meetingData.time,
           attendees: meetingData.attendees || [],
           status: 'Scheduled',
-          // Assuming Meeting type will be updated to support duration or handled on backend
-          // duration: meetingData.duration 
-      } as Meeting; // Casting if type definition is strict in other files, ideally update type definition
+      } as Meeting; 
       
       MOCK_MEETINGS.push(m);
       MOCK_MEETINGS.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());

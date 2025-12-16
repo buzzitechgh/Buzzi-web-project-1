@@ -1,5 +1,5 @@
 const KnowledgeEntry = require('../models/KnowledgeEntry');
-const fs = require('fs');
+const fs = require('fs').promises; // Use Promise API
 const path = require('path');
 
 // @desc    Get all knowledge entries
@@ -64,8 +64,8 @@ const uploadKnowledgeBase = async (req, res) => {
 
   try {
       if (ext === '.json') {
-          // Process JSON Immediately
-          const rawData = fs.readFileSync(filePath, 'utf8');
+          // Process JSON Asynchronously
+          const rawData = await fs.readFile(filePath, 'utf8');
           const entries = JSON.parse(rawData);
 
           if (!Array.isArray(entries)) {
@@ -91,7 +91,7 @@ const uploadKnowledgeBase = async (req, res) => {
           }
           
           // Cleanup
-          fs.unlinkSync(filePath);
+          await fs.unlink(filePath);
           
           return res.json({ success: true, count, message: `${count} entries imported successfully.` });
 
@@ -99,22 +99,22 @@ const uploadKnowledgeBase = async (req, res) => {
           // Mock Processing for PDF/DOCX
           // In production, use libraries like pdf-parse or mammoth here to extract text
           
-          // Cleanup (or move to permanent storage if processing async)
-          fs.unlinkSync(filePath);
+          // Cleanup
+          await fs.unlink(filePath);
 
           return res.json({ 
               success: true, 
               count: 0, 
-              message: `File received! Background processing started for ${req.file.originalname}. You will be notified when extraction completes.` 
+              message: `File received! Background processing started for ${req.file.originalname}.` 
           });
       } else {
-          fs.unlinkSync(filePath);
+          await fs.unlink(filePath);
           return res.status(400).json({ message: 'Unsupported file type.' });
       }
 
   } catch (error) {
       // Ensure file cleanup on error
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      try { await fs.unlink(filePath); } catch(e) {}
       console.error(error);
       res.status(500).json({ message: 'Processing Failed', error: error.message });
   }

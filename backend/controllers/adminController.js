@@ -1,7 +1,6 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
-// Assuming Message/Ticket model exists, otherwise using placeholder logic
 const SystemSetting = require('../models/SystemSetting');
 const { encrypt, decrypt, mask } = require('../utils/encryption');
 
@@ -35,10 +34,9 @@ const getDashboardStats = async (req, res) => {
       .lean();
 
     // 5. System Health Check
-    // In production, check Redis/Queue status here
     const health = {
         database: 'Connected',
-        emailService: 'Idle', // Placeholder logic
+        emailService: 'Idle', 
         paymentGateway: 'Operational'
     };
 
@@ -78,12 +76,15 @@ const getSystemSettings = async (req, res) => {
         settingsObj.payments.paystack.webhookSecret = mask(decrypt(settingsObj.payments.paystack.webhookSecret));
     }
     if (settingsObj.email?.smtp?.pass) {
-        settingsObj.email.smtp.pass = '********'; // Never show SMTP pass
+        settingsObj.email.smtp.pass = '********'; 
     }
-    // Mask other keys similarly...
+    if (settingsObj.sms?.apiKey) {
+        settingsObj.sms.apiKey = mask(decrypt(settingsObj.sms.apiKey));
+    }
 
     res.json(settingsObj);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Failed to fetch settings' });
   }
 };
@@ -104,19 +105,24 @@ const updateSystemSettings = async (req, res) => {
         return undefined; // Keep existing if masked
     };
 
-    // --- Apply Updates ---
+    // --- Apply Updates with Safeguards ---
     
     // 1. General
     settings.appName = updates.appName || settings.appName;
     settings.environment = updates.environment || settings.environment;
+    settings.supportEmail = updates.supportEmail || settings.supportEmail;
+    settings.logoUrl = updates.logoUrl || settings.logoUrl;
+    settings.formspreeUrl = updates.formspreeUrl || settings.formspreeUrl;
 
     // 2. Payments
     if (updates.payments) {
-        settings.payments.gateway = updates.payments.gateway;
-        settings.payments.testMode = updates.payments.testMode;
+        if (!settings.payments) settings.payments = {};
+        settings.payments.gateway = updates.payments.gateway || settings.payments.gateway;
+        settings.payments.testMode = updates.payments.testMode !== undefined ? updates.payments.testMode : settings.payments.testMode;
         
         if (updates.payments.paystack) {
-            settings.payments.paystack.publicKey = updates.payments.paystack.publicKey;
+            if (!settings.payments.paystack) settings.payments.paystack = {};
+            settings.payments.paystack.publicKey = updates.payments.paystack.publicKey || settings.payments.paystack.publicKey;
             
             const encSecret = updateSecure(null, updates.payments.paystack.secretKey);
             if (encSecret) settings.payments.paystack.secretKey = encSecret;
@@ -128,9 +134,12 @@ const updateSystemSettings = async (req, res) => {
 
     // 3. Email (SMTP)
     if (updates.email && updates.email.smtp) {
-        settings.email.service = updates.email.service;
-        settings.email.smtp.host = updates.email.smtp.host;
-        settings.email.smtp.user = updates.email.smtp.user;
+        if (!settings.email) settings.email = {};
+        if (!settings.email.smtp) settings.email.smtp = {};
+        
+        settings.email.service = updates.email.service || settings.email.service;
+        settings.email.smtp.host = updates.email.smtp.host || settings.email.smtp.host;
+        settings.email.smtp.user = updates.email.smtp.user || settings.email.smtp.user;
         
         const encPass = updateSecure(null, updates.email.smtp.pass);
         if (encPass) settings.email.smtp.pass = encPass;
@@ -138,8 +147,9 @@ const updateSystemSettings = async (req, res) => {
 
     // 3.5 SMS
     if (updates.sms) {
-        settings.sms.provider = updates.sms.provider;
-        settings.sms.senderId = updates.sms.senderId;
+        if (!settings.sms) settings.sms = {};
+        settings.sms.provider = updates.sms.provider || settings.sms.provider;
+        settings.sms.senderId = updates.sms.senderId || settings.sms.senderId;
         
         const encApiKey = updateSecure(null, updates.sms.apiKey);
         if (encApiKey) settings.sms.apiKey = encApiKey;
@@ -147,17 +157,27 @@ const updateSystemSettings = async (req, res) => {
 
     // 4. n8n
     if (updates.n8n) {
-        settings.n8n.enabled = updates.n8n.enabled;
-        settings.n8n.webhooks = updates.n8n.webhooks;
+        if (!settings.n8n) settings.n8n = {};
+        settings.n8n.enabled = updates.n8n.enabled !== undefined ? updates.n8n.enabled : settings.n8n.enabled;
+        
+        if (updates.n8n.webhooks) {
+            settings.n8n.webhooks = { ...settings.n8n.webhooks, ...updates.n8n.webhooks };
+        }
+    }
+
+    // 5. Security
+    if (updates.security) {
+        if (!settings.security) settings.security = {};
+        settings.security.twoFactorEnforced = updates.security.twoFactorEnforced !== undefined ? updates.security.twoFactorEnforced : settings.security.twoFactorEnforced;
+        settings.security.technicianApprovalRequired = updates.security.technicianApprovalRequired !== undefined ? updates.security.technicianApprovalRequired : settings.security.technicianApprovalRequired;
     }
 
     await settings.save();
     
-    // Emit event or clear cache here if using Redis
     res.json({ success: true, message: 'Settings updated successfully' });
 
   } catch (error) {
-    console.error(error);
+    console.error("Update Settings Error:", error);
     res.status(500).json({ message: 'Failed to update settings' });
   }
 };

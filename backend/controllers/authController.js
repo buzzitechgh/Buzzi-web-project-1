@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { sendVerificationEmail, sendWelcomeEmail, sendEmail } = require('../services/emailService');
+const SystemSetting = require('../models/SystemSetting');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -228,8 +229,12 @@ const loginUser = async (req, res) => {
           });
       }
 
-      // 3. Check Two-Factor Authentication
-      if (user.isTwoFactorEnabled) {
+      // Check System Settings for Global 2FA Enforcement
+      const settings = await SystemSetting.getSettings();
+      const is2FAEnforced = settings.security.twoFactorEnforced;
+
+      // 3. Check Two-Factor Authentication (Personal OR Global)
+      if (user.isTwoFactorEnabled || is2FAEnforced) {
           const otp = Math.floor(100000 + Math.random() * 900000).toString();
           user.otp = otp;
           user.otpExpires = new Date(Date.now() + 15 * 60 * 1000);

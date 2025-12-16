@@ -165,6 +165,8 @@ export interface User {
   ipAddress?: string;
   location?: string;
   isApproved?: boolean; // Added for technician approval
+  isTwoFactorEnabled?: boolean; // Added for security
+  technicianId?: string; // Added for technician identification
 }
 
 export interface LoginLog {

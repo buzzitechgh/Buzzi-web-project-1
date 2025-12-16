@@ -5,7 +5,7 @@ import {
   Calendar, MessageSquare, FileText, TrendingUp, Users, DollarSign,
   Phone, Mail, Clock, CheckCircle, AlertCircle, Edit2, Image, Save, X, Ticket,
   Settings, CreditCard, Webhook, Server, Plus, Star, Link as LinkIcon, Upload, UserPlus, Truck, Monitor, Video, ShieldCheck, Trash2,
-  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin, EyeOff, ToggleLeft, ToggleRight
+  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin, EyeOff, ToggleLeft, ToggleRight, Unlock
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { api } from '../services/api';
@@ -76,9 +76,18 @@ const AdminDashboard: React.FC = () => {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [newUserData, setNewUserData] = useState({ name: '', email: '', role: 'customer', password: '' });
+  
+  // Roles & Departments Management
+  const [techRoles, setTechRoles] = useState(["Network Engineer", "CCTV Specialist", "Software Support", "Field Technician", "System Administrator"]);
+  const [departments, setDepartments] = useState(["Infrastructure", "Security", "IT Support", "Field Ops", "Networking", "General"]);
+  const [isManagingRoles, setIsManagingRoles] = useState(false);
+  const [newRoleInput, setNewRoleInput] = useState("");
+  const [newDeptInput, setNewDeptInput] = useState("");
 
   // Technician Edit State
-  const [newTechData, setNewTechData] = useState<Partial<Technician>>({ name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
+  const [newTechData, setNewTechData] = useState<Partial<Technician> & { password?: string }>({ 
+      name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '', password: '' 
+  });
   const [isAddingTech, setIsAddingTech] = useState(false);
   
   // Ticket Management
@@ -119,8 +128,12 @@ const AdminDashboard: React.FC = () => {
       smtpHost: 'smtp.gmail.com',
       smtpUser: '',
       smtpPass: '',
+      twoFactorEnforced: false, 
   });
   
+  // Admin Personal 2FA State
+  const [currentUser2FA, setCurrentUser2FA] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
 
@@ -137,8 +150,6 @@ const AdminDashboard: React.FC = () => {
       { key: "cctv_banner", label: "Service Banner - CCTV" }
   ];
 
-  const TECH_ROLES = ["Network Engineer", "CCTV Specialist", "Software Support", "Field Technician", "System Administrator"];
-  const DEPARTMENTS = ["Infrastructure", "Security", "IT Support", "Field Ops", "Networking", "General"];
   const PRODUCT_CATEGORIES = ["Starlink", "Networking", "CCTV IP", "CCTV Analog", "Recorders", "Access Control", "Power", "Cables", "Accessories", "Office", "Computers"];
 
   // --- STYLING CONSTANTS ---
@@ -205,13 +216,37 @@ const AdminDashboard: React.FC = () => {
       setKnowledgeBase(kbData);
       setLoginLogs(logsData);
       
-      if(settingsData && Object.keys(settingsData).length > 0) {
-          setSettings(prev => ({...prev, ...settingsData}));
+      // Update Settings State (Flattening logic)
+      if (settingsData) {
+          setSettings(prev => ({
+              ...prev,
+              adminEmail: settingsData.supportEmail || prev.adminEmail,
+              logoUrl: settingsData.logoUrl || prev.logoUrl,
+              paymentGateway: settingsData.payments?.gateway || prev.paymentGateway,
+              paystackPublicKey: settingsData.payments?.paystack?.publicKey || prev.paystackPublicKey,
+              smsProvider: settingsData.sms?.provider || prev.smsProvider,
+              smsSenderId: settingsData.sms?.senderId || prev.smsSenderId,
+              smtpHost: settingsData.email?.smtp?.host || prev.smtpHost,
+              smtpUser: settingsData.email?.smtp?.user || prev.smtpUser,
+              n8nWebhook: settingsData.n8n?.webhooks?.orderCreated || prev.n8nWebhook,
+              n8nChatWebhook: settingsData.n8n?.webhooks?.ticketCreated || prev.n8nChatWebhook, 
+              n8nQuoteWebhook: settingsData.n8n?.webhooks?.quoteRequested || prev.n8nQuoteWebhook,
+              twoFactorEnforced: settingsData.security?.twoFactorEnforced || false,
+          }));
       }
+
       if(imagesData && Object.keys(imagesData).length > 0) {
           setSiteImages(imagesData);
           if (imagesData["hero_bg"]) setCurrentImageUrl(imagesData["hero_bg"]);
       }
+
+      // Check current user 2FA status
+      try {
+          const storedUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+          const me = usersData.find((u: any) => u.email === storedUser.email);
+          if (me) setCurrentUser2FA(me.isTwoFactorEnabled);
+      } catch (e) {}
+
     } catch (error) {
       console.error("Failed to load admin data", error);
       if ((error as any).message?.includes('401')) {
@@ -247,7 +282,6 @@ const AdminDashboard: React.FC = () => {
   const handleAssignTechnician = async (bookingId: string, technician: string) => {
      try {
        await api.assignTechnician(bookingId, technician, token);
-       // Update local state to reflect assignment immediately
        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, technician: technician === 'Unassigned' ? null : technician, taskStatus: 'Assigned', status: b.status === 'Pending' ? 'In Progress' : b.status } : b));
        alert(`Technician assigned & notified successfully.`);
      } catch (e) {
@@ -292,16 +326,33 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleAddTechnician = async () => {
-      if(!newTechData.name?.trim() || !newTechData.email?.trim()) {
-          alert("Name and Email are required");
+      if(!newTechData.name?.trim() || !newTechData.email?.trim() || !newTechData.password?.trim()) {
+          alert("Name, Email and Password are required");
           return;
       }
       try {
+          // Add to backend via API (Mocked logic handles user creation usually, but we force sync here)
           const result = await api.addTechnician(newTechData, token);
           if (result.technicians) setTechnicians(result.technicians);
-          setNewTechData({ name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '' });
+          
+          // Sync to Users list for visibility
+          const newTechUser = { 
+              id: `t-${Date.now()}`, 
+              name: newTechData.name!, 
+              email: newTechData.email!, 
+              role: 'technician', 
+              status: 'Active', 
+              isApproved: true,
+              technicianId: `TECH-${Math.floor(Math.random()*1000)}`,
+              password: newTechData.password
+          } as any; // Using any to bypass partial type mismatch
+          
+          // Update local Users list
+          setUsers(prev => [...prev, newTechUser]);
+          
+          setNewTechData({ name: '', email: '', phone: '', role: 'Network Engineer', department: 'Infrastructure', rating: 5, feedback: '', password: '' });
           setIsAddingTech(false);
-          alert("Technician Added Successfully");
+          alert("Technician Added Successfully (Account Active)");
       } catch (error) {
           alert("Failed to add technician");
       }
@@ -322,11 +373,46 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
-  const toggleOtpVisibility = (id: string) => {
-      setRevealedOtps(prev => ({...prev, [id]: !prev[id]}));
+  const handleAssignRole = async (userId: string, newRole: string) => {
+      try {
+          await api.updateUserRole(userId, newRole);
+          setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole as any } : u));
+          alert(`User role updated to ${newRole}`);
+      } catch (e) {
+          alert("Failed to update role");
+      }
   };
 
-  // --- ADMIN QUOTE ACTIONS ---
+  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+      const newStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';
+      const action = currentStatus === 'Active' ? 'Disable' : 'Enable';
+      
+      if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+
+      try {
+          await api.updateUserStatus(userId, newStatus);
+          setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus as any } : u));
+          alert(`User ${action}d successfully`);
+      } catch (e) {
+          alert(`Failed to ${action.toLowerCase()} user`);
+      }
+  };
+
+  const handleAddRole = () => {
+      if (newRoleInput.trim()) {
+          setTechRoles([...techRoles, newRoleInput.trim()]);
+          setNewRoleInput("");
+      }
+  };
+
+  const handleAddDept = () => {
+      if (newDeptInput.trim()) {
+          setDepartments([...departments, newDeptInput.trim()]);
+          setNewDeptInput("");
+      }
+  };
+
+  // --- QUOTE ACTIONS ---
   const handleAddQuoteItem = () => {
       if (!newQuoteItem.name || !newQuoteItem.price) return;
       const item: QuoteItem = {
@@ -337,7 +423,9 @@ const AdminDashboard: React.FC = () => {
           category: newQuoteItem.category || 'General',
           description: newQuoteItem.description
       };
-      const updatedItems = [...(newQuoteData.items || []), item];
+      // Explicitly cast to QuoteItem[] to avoid type errors
+      const currentItems = (newQuoteData.items || []) as QuoteItem[];
+      const updatedItems = [...currentItems, item];
       const total = updatedItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
       
       setNewQuoteData({ ...newQuoteData, items: updatedItems, grandTotal: total });
@@ -364,7 +452,7 @@ const AdminDashboard: React.FC = () => {
 
       try {
           await api.requestQuotation(fullQuote);
-          generateInvoice(fullQuote); // Download PDF locally for admin
+          generateInvoice(fullQuote); 
           setQuotes(prev => [fullQuote, ...prev]);
           setIsCreatingQuote(false);
           setNewQuoteData({ name: '', email: '', phone: '', serviceType: 'General', grandTotal: 0, items: [] });
@@ -374,18 +462,12 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
-  // --- KNOWLEDGE BASE ACTIONS ---
   const handleAddKBEntry = async () => {
       if (!newKBEntry.answer || !kbKeywordsInput) return;
-      
       const keywords = kbKeywordsInput.split(',').map(k => k.trim()).filter(k => k.length > 0);
       try {
-          const result = await api.addKnowledgeEntry({
-              ...newKBEntry,
-              keywords
-          }, token);
+          const result = await api.addKnowledgeEntry({ ...newKBEntry, keywords }, token);
           if (result.entry) setKnowledgeBase(prev => [...prev, result.entry!]);
-          
           setNewKBEntry({ category: 'general', keywords: [], answer: '' });
           setKbKeywordsInput("");
           setIsAddingKB(false);
@@ -407,19 +489,10 @@ const AdminDashboard: React.FC = () => {
   const handleKBUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      
-      // Check extension
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (!['json', 'pdf', 'docx'].includes(ext || '')) {
-          alert("Only JSON, PDF, and DOCX files are allowed.");
-          return;
-      }
-
       setUploading(true);
       try {
           const result = await api.uploadKnowledgeBase(file, token);
           alert(`Successfully uploaded/extracted ${result.count} entries!`);
-          // Refresh list
           const kbData = await api.getKnowledgeBase(token);
           setKnowledgeBase(kbData);
       } catch (error: any) {
@@ -429,53 +502,13 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
-  const handleScheduleMeeting = async () => {
-      try {
-          const result = await api.scheduleMeeting({
-              title: newMeetingData.title,
-              platform: newMeetingData.platform as any,
-              date: newMeetingData.date,
-              time: newMeetingData.time,
-              attendees: newMeetingData.attendees.split(',').map(e => e.trim())
-          });
-          setMeetings(prev => [...prev, result.meeting]);
-          setIsAddingMeeting(false);
-          setNewMeetingData({ title: '', platform: 'Zoom', date: '', time: '', attendees: '' });
-          alert("Meeting Scheduled & Link Generated");
-      } catch (e) {
-          alert("Failed to schedule meeting");
-      }
-  };
-
-  // --- CHAT ACTIONS ---
   const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer' | 'rustdesk') => {
-      if (!remoteId) {
-          alert("Please enter a Session ID");
-          return;
-      }
-      
-      const cleanId = remoteId.replace(/\s/g, ''); // Remove spaces
-      let protocolUrl = '';
-      let fallbackUrl = '';
-
-      if (tool === 'anydesk') {
-          protocolUrl = `anydesk:${cleanId}`;
-          fallbackUrl = 'https://anydesk.com/en/downloads';
-      } else if (tool === 'rustdesk') {
-          protocolUrl = `rustdesk://${cleanId}`;
-          fallbackUrl = 'https://rustdesk.com/download';
-      } else {
-          protocolUrl = `teamviewer8://${cleanId}`; 
-          fallbackUrl = 'https://www.teamviewer.com/en/download/';
-      }
-      
+      if (!remoteId) { alert("Please enter a Session ID"); return; }
+      const cleanId = remoteId.replace(/\s/g, '');
+      let protocolUrl = tool === 'anydesk' ? `anydesk:${cleanId}` : tool === 'rustdesk' ? `rustdesk://${cleanId}` : `teamviewer8://${cleanId}`; 
+      let fallbackUrl = tool === 'anydesk' ? 'https://anydesk.com/en/downloads' : tool === 'rustdesk' ? 'https://rustdesk.com/download' : 'https://www.teamviewer.com/en/download/';
       window.location.href = protocolUrl;
-      setTimeout(() => {
-         if(confirm(`It seems ${tool} didn't open. Do you want to download it?`)) {
-             window.open(fallbackUrl, '_blank');
-         }
-      }, 1500);
-      
+      setTimeout(() => { if(confirm(`It seems ${tool} didn't open. Do you want to download it?`)) window.open(fallbackUrl, '_blank'); }, 1500);
       setShowRemoteModal(false);
       setRemoteId("");
   };
@@ -484,9 +517,18 @@ const AdminDashboard: React.FC = () => {
       try {
           await api.updateOrderStatus(orderId, status, token);
           setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o));
-      } catch (error) {
-          alert("Failed to update status");
-      }
+      } catch (error) { alert("Failed to update status"); }
+  };
+
+  const handleCreateProduct = async () => {
+      try {
+          const productToSave = { ...newProduct, id: `prod-${Date.now()}` } as Product;
+          await api.addProduct(productToSave, token);
+          setProducts(prev => [...prev, productToSave]);
+          setIsAddingProduct(false);
+          setNewProduct({ name: '', price: 0, originalPrice: 0, stock: 0, brand: '', category: 'General', description: '', image: '', features: [], isActive: true });
+          alert("Product created successfully");
+      } catch (e) { alert("Failed to create product"); }
   };
 
   const handleSaveProduct = async () => {
@@ -501,19 +543,6 @@ const AdminDashboard: React.FC = () => {
      }
   };
 
-  const handleCreateProduct = async () => {
-      try {
-          const productToSave = { ...newProduct, id: `prod-${Date.now()}` } as Product;
-          await api.addProduct(productToSave, token);
-          setProducts(prev => [...prev, productToSave]);
-          setIsAddingProduct(false);
-          setNewProduct({ name: '', price: 0, originalPrice: 0, stock: 0, brand: '', category: 'General', description: '', image: '', features: [], isActive: true });
-          alert("Product created successfully");
-      } catch (e) {
-          alert("Failed to create product");
-      }
-  };
-
   const handleDeleteProduct = async (id: string) => {
       if(!confirm("Are you sure?")) return;
       await api.deleteProduct(id, token);
@@ -524,6 +553,65 @@ const AdminDashboard: React.FC = () => {
       const updated = { ...product, isActive: !product.isActive };
       await api.updateProductDetails(updated, token);
       setProducts(prev => prev.map(p => p.id === product.id ? updated : p));
+  };
+
+  const handleSaveImages = async () => {
+      const updatedImages = { ...siteImages, [selectedImageKey]: currentImageUrl };
+      try {
+        await api.updateSiteImages(updatedImages, token);
+        setSiteImages(updatedImages);
+        alert("Site images updated successfully!");
+      } catch (e) { alert("Failed to update images"); }
+  };
+
+  const handleSaveSettings = async () => {
+      try {
+          const payload = {
+              supportEmail: settings.adminEmail,
+              logoUrl: settings.logoUrl,
+              payments: { gateway: settings.paymentGateway, paystack: { publicKey: settings.paystackPublicKey, secretKey: settings.paystackSecretKey } },
+              sms: { provider: settings.smsProvider, senderId: settings.smsSenderId, apiKey: settings.smsApiKey },
+              email: { smtp: { host: settings.smtpHost, user: settings.smtpUser, pass: settings.smtpPass } },
+              n8n: { webhooks: { orderCreated: settings.n8nWebhook, ticketCreated: settings.n8nChatWebhook, quoteRequested: settings.n8nQuoteWebhook } },
+              formspreeUrl: settings.formspreeUrl,
+              security: { twoFactorEnforced: settings.twoFactorEnforced }
+          };
+          await api.saveSettings(payload, token);
+          alert("System settings saved successfully.");
+      } catch (e) { alert("Failed to save settings."); }
+  };
+
+  const handleToggleAdmin2FA = async () => {
+      if (!confirm(`Are you sure you want to ${currentUser2FA ? 'disable' : 'enable'} 2FA?`)) return;
+      try {
+          const res = await api.toggleTwoFactor();
+          setCurrentUser2FA(res.isTwoFactorEnabled);
+          alert(res.message);
+      } catch (e) { alert("Failed to toggle 2FA."); }
+  };
+
+  const handleSendBulkMessage = async () => {
+      if (!bulkMessage) return;
+      let targetEmails = users.map(u => u.email);
+      if (bulkRecipients === 'technician') targetEmails = users.filter(u => u.role === 'technician').map(u => u.email);
+      if (bulkRecipients === 'customer') targetEmails = users.filter(u => u.role === 'customer').map(u => u.email);
+      try {
+          await api.sendBulkMessage(bulkType, targetEmails, bulkMessage, bulkSubject);
+          alert(`${bulkType === 'email' ? 'Emails' : 'SMS'} queued for ${targetEmails.length} users.`);
+          setBulkMessage("");
+          setBulkSubject("");
+      } catch (e) { alert("Failed to send bulk message"); }
+  };
+
+  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+          const url = await api.uploadImage(file);
+          setCurrentImageUrl(url);
+          setSiteImages((prev: any) => ({ ...prev, [selectedImageKey]: url }));
+      } catch (error) { alert("Failed to upload image"); } finally { setUploading(false); }
   };
 
   const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
@@ -545,6 +633,29 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+          const url = await api.uploadImage(file);
+          setSettings(prev => ({ ...prev, logoUrl: url }));
+      } catch(e) { alert("Logo upload failed"); } finally { setUploading(false); }
+  };
+
+  const handleApproveUser = async (userId: string) => {
+      try {
+          await api.approveUser(userId, token);
+          setUsers(prev => prev.map(u => u.id === userId ? { ...u, isApproved: true, status: 'Active' } : u));
+          alert("User approved successfully");
+      } catch (e) { alert("Failed to approve user"); }
+  };
+
+  const handleDeleteMeeting = (id: string) => {
+      if(!confirm("Are you sure you want to cancel this meeting?")) return;
+      setMeetings(prev => prev.filter(m => m.id !== id));
+  };
+
   const handleSendReply = async (messageId: string) => {
       if(!replyText) return;
       try {
@@ -558,93 +669,7 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
-  const handleSaveImages = async () => {
-      // Ensure the currently edited field is saved to state object before submitting
-      const updatedImages = { ...siteImages, [selectedImageKey]: currentImageUrl };
-      try {
-        await api.updateSiteImages(updatedImages, token);
-        setSiteImages(updatedImages);
-        alert("Site images updated successfully!");
-      } catch (e) {
-        alert("Failed to update images");
-      }
-  };
-
-  const handleSaveSettings = async () => {
-      try {
-          await api.saveSettings(settings, token);
-          alert("System settings saved successfully.");
-      } catch (e) {
-          alert("Failed to save settings.");
-      }
-  };
-
-  const handleSendBulkMessage = async () => {
-      if (!bulkMessage) return;
-      
-      // Filter recipients
-      let targetEmails = users.map(u => u.email);
-      if (bulkRecipients === 'technician') targetEmails = users.filter(u => u.role === 'technician').map(u => u.email);
-      if (bulkRecipients === 'customer') targetEmails = users.filter(u => u.role === 'customer').map(u => u.email);
-
-      try {
-          await api.sendBulkMessage(bulkType, targetEmails, bulkMessage, bulkSubject);
-          alert(`${bulkType === 'email' ? 'Emails' : 'SMS'} queued for ${targetEmails.length} users.`);
-          setBulkMessage("");
-          setBulkSubject("");
-      } catch (e) {
-          alert("Failed to send bulk message");
-      }
-  };
-
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      setUploading(true);
-      try {
-          const url = await api.uploadImage(file);
-          setCurrentImageUrl(url);
-          setSiteImages((prev: any) => ({ ...prev, [selectedImageKey]: url }));
-      } catch (error) {
-          alert("Failed to upload image");
-      } finally {
-          setUploading(false);
-      }
-  };
-
-  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setUploading(true);
-      try {
-          const url = await api.uploadImage(file);
-          setSettings(prev => ({ ...prev, logoUrl: url }));
-      } catch(e) {
-          alert("Logo upload failed");
-      } finally {
-          setUploading(false);
-      }
-  };
-
-  const handleDeleteMeeting = async (id: string) => {
-      if(!confirm("Cancel this meeting?")) return;
-      // Since API doesn't have deleteMeeting, we just remove from local state
-      setMeetings(prev => prev.filter(m => m.id !== id));
-  };
-
-  const handleApproveUser = async (userId: string) => {
-      try {
-          await api.approveUser(userId, token);
-          setUsers(prev => prev.map(u => u.id === userId ? { ...u, isApproved: true, status: 'Active' } : u));
-          alert("User approved successfully");
-      } catch (e) {
-          alert("Failed to approve user");
-      }
-  };
-
   // --- Components for Sections ---
-
   const OverviewCard = ({ title, value, icon: Icon, color }: any) => (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
       <div className={`p-4 rounded-full ${color} text-white`}>
@@ -662,7 +687,6 @@ const AdminDashboard: React.FC = () => {
     if (['Completed', 'Confirmed', 'Read', 'Resolved', 'Responded', 'Delivered', 'Active', 'Approved'].includes(status)) colorClass = 'bg-green-100 text-green-700';
     else if (['Pending', 'Processing', 'Open', 'In Progress', 'Out for Delivery'].includes(status)) colorClass = 'bg-yellow-100 text-yellow-700';
     else if (['Cancelled', 'Rejected', 'Suspended'].includes(status)) colorClass = 'bg-red-100 text-red-700';
-    
     return (
       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${colorClass}`}>
         {status}
@@ -670,79 +694,58 @@ const AdminDashboard: React.FC = () => {
     );
   };
 
-  // Chart Data Preparation
-  const revenueData = [1200, 1900, 1500, 2200, 1800, 2800, 3500, 3100, 4200, 4500]; // Mock monthly revenue
+  const revenueData = [1200, 1900, 1500, 2200, 1800, 2800, 3500, 3100, 4200, 4500]; 
   const chartLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
-  
-  // Analytics Data
   const totalUsers = users.length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans relative">
-      
-      {/* SIDEBAR NAVIGATION */}
       <aside className="bg-slate-900 text-slate-400 w-full md:w-64 flex-shrink-0 md:h-screen sticky top-0 flex flex-col z-20">
         <div className="p-6 border-b border-slate-800 flex items-center gap-2">
            <Logo lightMode={true} className="h-8 scale-90 origin-left" customSrc={settings.logoUrl} />
         </div>
-        
         <nav className="flex-grow p-4 space-y-2 overflow-y-auto">
           <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'overview' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <LayoutDashboard size={18} /> <span className="font-medium">Dashboard</span>
           </button>
-          
           <div className="pt-4 pb-2 text-xs font-bold uppercase tracking-wider text-slate-600 px-4">Operations</div>
-          
           <button onClick={() => setActiveTab('bookings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'bookings' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Ticket size={18} /> <span>Service Desk & Tickets</span>
           </button>
-          
           <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'messages' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <div className="flex items-center gap-3"><MessageSquare size={18} /> <span>Support Inbox</span></div>
             {messages.filter(m => m.status === 'Open').length > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{messages.filter(m => m.status === 'Open').length}</span>}
           </button>
-
           <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'orders' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <div className="flex items-center gap-3"><ShoppingBag size={18} /> <span>Orders</span></div>
           </button>
-
           <button onClick={() => setActiveTab('quotes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'quotes' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <FileText size={18} /> <span>Quotes</span>
           </button>
-
           <div className="pt-4 pb-2 text-xs font-bold uppercase tracking-wider text-slate-600 px-4">People & AI</div>
-
           <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'users' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Users size={18} /> <span>User Manager & Logs</span>
           </button>
-
           <button onClick={() => setActiveTab('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'meetings' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Video size={18} /> <span>Meetings & Remote</span>
           </button>
-
           <button onClick={() => setActiveTab('chatbot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'chatbot' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Bot size={18} /> <span>Chatbot & AI</span>
           </button>
-
           <button onClick={() => setActiveTab('communication')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'communication' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Megaphone size={18} /> <span>Bulk Comms</span>
           </button>
-          
           <div className="pt-4 pb-2 text-xs font-bold uppercase tracking-wider text-slate-600 px-4">Content & System</div>
-          
           <button onClick={() => setActiveTab('inventory')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'inventory' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Package size={18} /> <span>Inventory</span>
           </button>
-          
           <button onClick={() => setActiveTab('media')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'media' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Image size={18} /> <span>Site Media</span>
           </button>
-
           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-primary-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}>
             <Settings size={18} /> <span>Settings</span>
           </button>
         </nav>
-        
         <div className="p-4 border-t border-slate-800">
            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-800 hover:text-red-300 transition-all">
              <LogOut size={18} /> <span>Sign Out</span>
@@ -750,21 +753,14 @@ const AdminDashboard: React.FC = () => {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="flex-grow p-4 md:p-8 overflow-y-auto h-screen">
-        
-        {/* Top Bar */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold text-slate-800 capitalize">{activeTab.replace('media', 'Site Media Manager').replace('bookings', 'Service Desk & Tickets')}</h1>
           <div className="flex gap-2">
             <button onClick={() => setShowRemoteModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-primary-600 transition shadow-sm">
                 <Monitor size={16} /> Remote Access
             </button>
-            <button 
-                onClick={() => fetchData(token)} 
-                disabled={loading}
-                className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-slate-600 shadow-sm transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-            >
+            <button onClick={() => fetchData(token)} disabled={loading} className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-slate-600 shadow-sm transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-gray-50'}`}>
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 
                 <span className="hidden sm:inline">{loading ? 'Refreshing...' : 'Refresh Data'}</span>
             </button>
@@ -772,13 +768,9 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-64 text-slate-400 animate-pulse">
-            Loading data...
-          </div>
+          <div className="flex items-center justify-center h-64 text-slate-400 animate-pulse">Loading data...</div>
         ) : (
           <div className="space-y-6">
-
-            {/* OVERVIEW TAB */}
             {activeTab === 'overview' && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -787,7 +779,6 @@ const AdminDashboard: React.FC = () => {
                   <OverviewCard title="Active Orders" value={stats.activeOrders || 0} icon={ShoppingBag} color="bg-purple-500" />
                   <OverviewCard title="Open Tickets" value={stats.openTickets || 0} icon={Ticket} color="bg-orange-500" />
                 </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                    <div className="lg:col-span-2">
                       <DashboardChart data={revenueData} labels={chartLabels} title="Revenue Trend" type="line" height={300} />
@@ -795,25 +786,15 @@ const AdminDashboard: React.FC = () => {
                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                       <h3 className="font-bold text-slate-700 mb-4">Quick Actions</h3>
                       <div className="space-y-3">
-                         <button onClick={() => setActiveTab('bookings')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
-                            <span className="text-sm font-medium">Manage Tickets</span>
-                            <ArrowRight size={16} className="text-slate-400" />
-                         </button>
-                         <button onClick={() => setActiveTab('users')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
-                            <span className="text-sm font-medium">View Users</span>
-                            <ArrowRight size={16} className="text-slate-400" />
-                         </button>
-                         <button onClick={() => setActiveTab('inventory')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition">
-                            <span className="text-sm font-medium">Update Inventory</span>
-                            <ArrowRight size={16} className="text-slate-400" />
-                         </button>
+                         <button onClick={() => setActiveTab('bookings')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition"><span className="text-sm font-medium">Manage Tickets</span><ArrowRight size={16} className="text-slate-400" /></button>
+                         <button onClick={() => setActiveTab('users')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition"><span className="text-sm font-medium">View Users</span><ArrowRight size={16} className="text-slate-400" /></button>
+                         <button onClick={() => setActiveTab('inventory')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition"><span className="text-sm font-medium">Update Inventory</span><ArrowRight size={16} className="text-slate-400" /></button>
                       </div>
                    </div>
                 </div>
               </>
             )}
 
-            {/* ORDERS TAB */}
             {activeTab === 'orders' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -832,19 +813,12 @@ const AdminDashboard: React.FC = () => {
                       {orders.map((order) => (
                         <tr key={order.orderId} className="bg-white border-b hover:bg-slate-50">
                           <td className="px-6 py-4 font-medium text-slate-900">{order.orderId}</td>
-                          <td className="px-6 py-4">
-                            <div>{order.customer.name}</div>
-                            <div className="text-xs text-slate-400">{order.customer.email}</div>
-                          </td>
+                          <td className="px-6 py-4"><div>{order.customer.name}</div><div className="text-xs text-slate-400">{order.customer.email}</div></td>
                           <td className="px-6 py-4">GHS {order.total.toLocaleString()}</td>
                           <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
                           <td className="px-6 py-4">{new Date(order.date).toLocaleDateString()}</td>
                           <td className="px-6 py-4">
-                            <select 
-                              value={order.status} 
-                              onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)}
-                              className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-1.5"
-                            >
+                            <select value={order.status} onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-1.5">
                               <option value="Pending">Pending</option>
                               <option value="Processing">Processing</option>
                               <option value="Out for Delivery">Out for Delivery</option>
@@ -860,7 +834,6 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* BOOKINGS TAB (Service Desk) */}
             {activeTab === 'bookings' && (
                <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -870,7 +843,6 @@ const AdminDashboard: React.FC = () => {
                       </div>
                       <Button onClick={() => setIsAddingBooking(true)} size="sm"><Plus size={16} className="mr-2"/> New Ticket</Button>
                   </div>
-
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                       <table className="w-full text-sm text-left text-slate-500">
                           <thead className="bg-slate-50 text-xs text-slate-700 uppercase">
@@ -887,21 +859,12 @@ const AdminDashboard: React.FC = () => {
                               {bookings.map(booking => (
                                   <tr key={booking.id} className="border-b hover:bg-slate-50">
                                       <td className="px-6 py-4 font-mono text-xs">{booking.id}</td>
-                                      <td className="px-6 py-4">
-                                          <p className="font-bold text-slate-800">{booking.name}</p>
-                                          <p className="text-xs text-slate-400">{booking.phone}</p>
-                                      </td>
+                                      <td className="px-6 py-4"><p className="font-bold text-slate-800">{booking.name}</p><p className="text-xs text-slate-400">{booking.phone}</p></td>
                                       <td className="px-6 py-4">{booking.serviceType}</td>
                                       <td className="px-6 py-4">
-                                          <select 
-                                              className="bg-gray-50 border border-gray-200 text-xs rounded p-1 w-32"
-                                              value={booking.technician || 'Unassigned'}
-                                              onChange={(e) => handleAssignTechnician(booking.id, e.target.value)}
-                                          >
+                                          <select className="bg-gray-50 border border-gray-200 text-xs rounded p-1 w-32" value={booking.technician || 'Unassigned'} onChange={(e) => handleAssignTechnician(booking.id, e.target.value)}>
                                               <option value="Unassigned">Unassigned</option>
-                                              {technicians.map(t => (
-                                                  <option key={t.id} value={t.name}>{t.name}</option>
-                                              ))}
+                                              {technicians.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                                           </select>
                                       </td>
                                       <td className="px-6 py-4"><StatusBadge status={booking.status} /></td>
@@ -917,24 +880,15 @@ const AdminDashboard: React.FC = () => {
                </div>
             )}
 
-            {/* INVENTORY TAB */}
             {activeTab === 'inventory' && (
               <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
                       <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                          <input 
-                              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none w-64" 
-                              placeholder="Search products..."
-                              value={inventorySearch}
-                              onChange={e => setInventorySearch(e.target.value)}
-                          />
+                          <input className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none w-64" placeholder="Search products..." value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} />
                       </div>
-                      <Button onClick={() => setIsAddingProduct(true)} size="sm">
-                          <Plus size={16} className="mr-2"/> Add Product
-                      </Button>
+                      <Button onClick={() => setIsAddingProduct(true)} size="sm"><Plus size={16} className="mr-2"/> Add Product</Button>
                   </div>
-
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                       <table className="w-full text-sm text-left text-slate-500">
                           <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b">
@@ -950,18 +904,10 @@ const AdminDashboard: React.FC = () => {
                           <tbody>
                               {products.filter(p => p.name.toLowerCase().includes(inventorySearch.toLowerCase())).map(product => (
                                   <tr key={product.id} className="bg-white border-b hover:bg-slate-50">
-                                      <td className="px-6 py-4 flex items-center gap-3">
-                                          <img src={product.image} alt={product.name} className="w-10 h-10 rounded object-cover bg-gray-100" />
-                                          <div>
-                                              <div className="font-bold text-slate-900">{product.name}</div>
-                                              <div className="text-xs text-slate-400">{product.brand || 'Generic'}</div>
-                                          </div>
-                                      </td>
+                                      <td className="px-6 py-4 flex items-center gap-3"><img src={product.image} alt={product.name} className="w-10 h-10 rounded object-cover bg-gray-100" /><div><div className="font-bold text-slate-900">{product.name}</div><div className="text-xs text-slate-400">{product.brand || 'Generic'}</div></div></td>
                                       <td className="px-6 py-4">{product.category}</td>
                                       <td className="px-6 py-4">GHS {product.price.toLocaleString()}</td>
-                                      <td className="px-6 py-4">
-                                          <span className={product.stock < 5 ? 'text-red-500 font-bold' : ''}>{product.stock}</span>
-                                      </td>
+                                      <td className="px-6 py-4"><span className={product.stock < 5 ? 'text-red-500 font-bold' : ''}>{product.stock}</span></td>
                                       <td className="px-6 py-4">
                                           <button onClick={() => handleToggleProductStatus(product)} className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${product.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                                               {product.isActive !== false ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
@@ -982,56 +928,19 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* SITE MEDIA TAB */}
             {activeTab === 'media' && (
               <div className="space-y-6">
                   <div className="bg-white p-6 rounded-xl border border-gray-200">
                       <h3 className="font-bold text-lg mb-4">Manage Site Images</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-4">
-                              <div>
-                                  <label className={labelStyle}>Select Section</label>
-                                  <select 
-                                      className={inputStyle}
-                                      value={selectedImageKey}
-                                      onChange={e => setSelectedImageKey(e.target.value)}
-                                  >
-                                      {MEDIA_LOCATIONS.map(loc => (
-                                          <option key={loc.key} value={loc.key}>{loc.label}</option>
-                                      ))}
-                                  </select>
-                              </div>
-                              <div>
-                                  <label className={labelStyle}>Image URL</label>
-                                  <input 
-                                      className={inputStyle}
-                                      value={currentImageUrl}
-                                      onChange={e => setCurrentImageUrl(e.target.value)}
-                                      placeholder="https://..."
-                                  />
-                              </div>
-                              <div>
-                                  <label className={labelStyle}>Or Upload New Image</label>
-                                  <input 
-                                      type="file" 
-                                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                                      onChange={(e) => handleUploadImage(e)}
-                                  />
-                              </div>
-                              <Button onClick={handleSaveImages} disabled={uploading} className="w-full">
-                                  {uploading ? 'Uploading...' : 'Save Image Update'}
-                              </Button>
+                              <div><label className={labelStyle}>Select Section</label><select className={inputStyle} value={selectedImageKey} onChange={e => setSelectedImageKey(e.target.value)}>{MEDIA_LOCATIONS.map(loc => <option key={loc.key} value={loc.key}>{loc.label}</option>)}</select></div>
+                              <div><label className={labelStyle}>Image URL</label><input className={inputStyle} value={currentImageUrl} onChange={e => setCurrentImageUrl(e.target.value)} placeholder="https://..." /></div>
+                              <div><label className={labelStyle}>Or Upload New Image</label><input type="file" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={(e) => handleUploadImage(e)} /></div>
+                              <Button onClick={handleSaveImages} disabled={uploading} className="w-full">{uploading ? 'Uploading...' : 'Save Image Update'}</Button>
                           </div>
-                          
                           <div className="border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center bg-gray-50 min-h-[300px] overflow-hidden relative">
-                              {currentImageUrl ? (
-                                  <img src={currentImageUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
-                              ) : (
-                                  <div className="text-center text-slate-400">
-                                      <Image size={48} className="mx-auto mb-2 opacity-50" />
-                                      <p>No image selected</p>
-                                  </div>
-                              )}
+                              {currentImageUrl ? <img src={currentImageUrl} alt="Preview" className="max-w-full max-h-full object-contain" /> : <div className="text-center text-slate-400"><Image size={48} className="mx-auto mb-2 opacity-50" /><p>No image selected</p></div>}
                               <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">Preview</div>
                           </div>
                       </div>
@@ -1039,272 +948,127 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* SETTINGS TAB */}
             {activeTab === 'settings' && (
               <div className="max-w-4xl mx-auto space-y-6">
-                  {/* General Configuration */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Settings size={20} /> General Configuration</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                              <label className={labelStyle}>Admin Email</label>
-                              <input className={inputStyle} value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className={labelStyle}>Logo URL</label>
-                              <div className="flex gap-2">
-                                  <input className={inputStyle} value={settings.logoUrl} onChange={e => setSettings({...settings, logoUrl: e.target.value})} />
-                                  <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300">
-                                      <Upload size={20} className="text-slate-600" />
-                                      <input type="file" className="hidden" onChange={handleUploadLogo} />
-                                  </label>
-                              </div>
-                          </div>
+                          <div><label className={labelStyle}>Admin Email</label><input className={inputStyle} value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} /></div>
+                          <div><label className={labelStyle}>Logo URL</label><div className="flex gap-2"><input className={inputStyle} value={settings.logoUrl} onChange={e => setSettings({...settings, logoUrl: e.target.value})} /><label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300"><Upload size={20} className="text-slate-600" /><input type="file" className="hidden" onChange={handleUploadLogo} /></label></div></div>
                       </div>
                   </div>
-
-                  {/* Payment Gateway */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><CreditCard size={20} /> Payment Gateway</h3>
                       <div className="space-y-4">
-                          <div>
-                              <label className={labelStyle}>Provider</label>
-                              <select className={inputStyle} value={settings.paymentGateway} onChange={e => setSettings({...settings, paymentGateway: e.target.value})}>
-                                  <option value="paystack">Paystack</option>
-                                  <option value="stripe">Stripe</option>
-                                  <option value="momo">Mobile Money (Manual)</option>
-                              </select>
-                          </div>
-                          {settings.paymentGateway === 'paystack' && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                      <label className={labelStyle}>Public Key</label>
-                                      <input className={inputStyle} value={settings.paystackPublicKey} onChange={e => setSettings({...settings, paystackPublicKey: e.target.value})} placeholder="pk_test_..." />
-                                  </div>
-                                  <div>
-                                      <label className={labelStyle}>Secret Key</label>
-                                      <input type="password" className={inputStyle} value={settings.paystackSecretKey} onChange={e => setSettings({...settings, paystackSecretKey: e.target.value})} placeholder="sk_test_..." />
-                                  </div>
-                              </div>
-                          )}
+                          <div><label className={labelStyle}>Provider</label><select className={inputStyle} value={settings.paymentGateway} onChange={e => setSettings({...settings, paymentGateway: e.target.value})}><option value="paystack">Paystack</option><option value="stripe">Stripe</option><option value="momo">Mobile Money (Manual)</option></select></div>
+                          {settings.paymentGateway === 'paystack' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className={labelStyle}>Public Key</label><input className={inputStyle} value={settings.paystackPublicKey} onChange={e => setSettings({...settings, paystackPublicKey: e.target.value})} placeholder="pk_test_..." /></div><div><label className={labelStyle}>Secret Key</label><input type="password" className={inputStyle} value={settings.paystackSecretKey} onChange={e => setSettings({...settings, paystackSecretKey: e.target.value})} placeholder="sk_test_..." /></div></div>)}
                       </div>
                   </div>
-
-                  {/* SMS Notifications */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ShieldCheck size={20} /> Security Settings</h3>
+                      <div className="space-y-6">
+                          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                               <div className="flex items-center gap-3">
+                                   <div className={`p-2 rounded-full ${currentUser2FA ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>{currentUser2FA ? <Lock size={18} /> : <Unlock size={18} />}</div>
+                                   <div><p className="text-sm font-bold text-slate-800">My Account Two-Factor Authentication</p><p className="text-xs text-slate-500">Secure your admin login with email OTP.</p></div>
+                               </div>
+                               <button onClick={handleToggleAdmin2FA} className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${currentUser2FA ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-600 text-white hover:bg-green-700'}`}>{currentUser2FA ? 'Disable 2FA' : 'Enable 2FA'}</button>
+                          </div>
+                          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                               <div className="flex items-center gap-3">
+                                   <div className={`p-2 rounded-full ${settings.twoFactorEnforced ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}><ShieldCheck size={18} /></div>
+                                   <div><p className="text-sm font-bold text-slate-800">System-Wide 2FA Enforcement</p><p className="text-xs text-slate-500">Force all users (including technicians) to use 2FA.</p></div>
+                               </div>
+                               <div className="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                                   <input type="checkbox" name="toggleEnforce" id="toggleEnforce" className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300" style={{ right: settings.twoFactorEnforced ? '0' : '50%', borderColor: settings.twoFactorEnforced ? '#3b82f6' : '#cbd5e1' }} checked={settings.twoFactorEnforced} onChange={() => setSettings({...settings, twoFactorEnforced: !settings.twoFactorEnforced})} />
+                                   <label htmlFor="toggleEnforce" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${settings.twoFactorEnforced ? 'bg-blue-500' : 'bg-slate-300'}`}></label>
+                               </div>
+                          </div>
+                      </div>
+                  </div>
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Smartphone size={20} /> SMS Notifications</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                              <label className={labelStyle}>Provider</label>
-                              <select className={inputStyle} value={settings.smsProvider} onChange={e => setSettings({...settings, smsProvider: e.target.value})}>
-                                  <option value="AfricaTalking">Africa's Talking</option>
-                                  <option value="Twilio">Twilio</option>
-                                  <option value="Arkesel">Arkesel</option>
-                                  <option value="console_log">Console Log (Dev)</option>
-                              </select>
-                          </div>
-                          <div>
-                              <label className={labelStyle}>Sender ID</label>
-                              <input className={inputStyle} value={settings.smsSenderId} onChange={e => setSettings({...settings, smsSenderId: e.target.value})} placeholder="BUZZITECH" />
-                          </div>
-                          <div className="col-span-2">
-                              <label className={labelStyle}>API Key</label>
-                              <input type="password" className={inputStyle} value={settings.smsApiKey} onChange={e => setSettings({...settings, smsApiKey: e.target.value})} />
-                          </div>
+                          <div><label className={labelStyle}>Provider</label><select className={inputStyle} value={settings.smsProvider} onChange={e => setSettings({...settings, smsProvider: e.target.value})}><option value="AfricaTalking">Africa's Talking</option><option value="Twilio">Twilio</option><option value="Arkesel">Arkesel</option><option value="console_log">Console Log (Dev)</option></select></div>
+                          <div><label className={labelStyle}>Sender ID</label><input className={inputStyle} value={settings.smsSenderId} onChange={e => setSettings({...settings, smsSenderId: e.target.value})} placeholder="BUZZITECH" /></div>
+                          <div className="col-span-2"><label className={labelStyle}>API Key</label><input type="password" className={inputStyle} value={settings.smsApiKey} onChange={e => setSettings({...settings, smsApiKey: e.target.value})} /></div>
                       </div>
                   </div>
-
-                  {/* Automation & Integrations */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Webhook size={20} /> Automation & Integrations</h3>
                       <div className="space-y-4">
-                          <div>
-                              <label className={labelStyle}>Main Webhook URL (n8n)</label>
-                              <input className={inputStyle} value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://your-n8n-instance.com/webhook/..." />
-                          </div>
-                          <div>
-                              <label className={labelStyle}>Formspree Endpoint</label>
-                              <input className={inputStyle} value={settings.formspreeUrl} onChange={e => setSettings({...settings, formspreeUrl: e.target.value})} placeholder="https://formspree.io/f/..." />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                  <label className={labelStyle}>Chatbot Webhook</label>
-                                  <input className={inputStyle} value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} />
-                              </div>
-                              <div>
-                                  <label className={labelStyle}>Quote Generator Webhook</label>
-                                  <input className={inputStyle} value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} />
-                              </div>
-                          </div>
+                          <div><label className={labelStyle}>Main Webhook URL (n8n)</label><input className={inputStyle} value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://your-n8n-instance.com/webhook/..." /></div>
+                          <div><label className={labelStyle}>Formspree Endpoint</label><input className={inputStyle} value={settings.formspreeUrl} onChange={e => setSettings({...settings, formspreeUrl: e.target.value})} placeholder="https://formspree.io/f/..." /></div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className={labelStyle}>Chatbot Webhook</label><input className={inputStyle} value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} /></div><div><label className={labelStyle}>Quote Generator Webhook</label><input className={inputStyle} value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} /></div></div>
                       </div>
                   </div>
-
-                  {/* Email (SMTP) */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Mail size={20} /> Email (SMTP)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                              <label className={labelStyle}>SMTP Host</label>
-                              <input className={inputStyle} value={settings.smtpHost} onChange={e => setSettings({...settings, smtpHost: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className={labelStyle}>SMTP User</label>
-                              <input className={inputStyle} value={settings.smtpUser} onChange={e => setSettings({...settings, smtpUser: e.target.value})} />
-                          </div>
-                          <div className="col-span-2">
-                              <label className={labelStyle}>SMTP Password</label>
-                              <input type="password" className={inputStyle} value={settings.smtpPass} onChange={e => setSettings({...settings, smtpPass: e.target.value})} />
-                          </div>
+                          <div><label className={labelStyle}>SMTP Host</label><input className={inputStyle} value={settings.smtpHost} onChange={e => setSettings({...settings, smtpHost: e.target.value})} /></div>
+                          <div><label className={labelStyle}>SMTP User</label><input className={inputStyle} value={settings.smtpUser} onChange={e => setSettings({...settings, smtpUser: e.target.value})} /></div>
+                          <div className="col-span-2"><label className={labelStyle}>SMTP Password</label><input type="password" className={inputStyle} value={settings.smtpPass} onChange={e => setSettings({...settings, smtpPass: e.target.value})} /></div>
                       </div>
                   </div>
-
-                  <div className="flex justify-end">
-                      <Button onClick={handleSaveSettings} className="px-8">Save Configuration</Button>
-                  </div>
+                  <div className="flex justify-end"><Button onClick={handleSaveSettings} className="px-8">Save Configuration</Button></div>
               </div>
             )}
 
-            {/* BULK COMMS TAB */}
             {activeTab === 'communication' && (
               <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
                   <h3 className="font-bold text-xl mb-6 flex items-center gap-2"><Megaphone className="text-primary-600" /> Bulk Messaging Center</h3>
-                  
                   <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-6">
                           <div>
                               <label className={labelStyle}>Channel</label>
                               <div className="flex gap-4 mt-2">
-                                  <label className="flex items-center gap-2 cursor-pointer">
-                                      <input type="radio" name="channel" checked={bulkType === 'email'} onChange={() => setBulkType('email')} className="text-primary-600 focus:ring-primary-500" />
-                                      <span>Email Broadcast</span>
-                                  </label>
-                                  <label className="flex items-center gap-2 cursor-pointer">
-                                      <input type="radio" name="channel" checked={bulkType === 'sms'} onChange={() => setBulkType('sms')} className="text-primary-600 focus:ring-primary-500" />
-                                      <span>SMS Blast</span>
-                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="channel" checked={bulkType === 'email'} onChange={() => setBulkType('email')} className="text-primary-600 focus:ring-primary-500" /><span>Email Broadcast</span></label>
+                                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="channel" checked={bulkType === 'sms'} onChange={() => setBulkType('sms')} className="text-primary-600 focus:ring-primary-500" /><span>SMS Blast</span></label>
                               </div>
                           </div>
-                          <div>
-                              <label className={labelStyle}>Target Audience</label>
-                              <select className={inputStyle} value={bulkRecipients} onChange={e => setBulkRecipients(e.target.value)}>
-                                  <option value="all">All Users</option>
-                                  <option value="customer">Customers Only</option>
-                                  <option value="technician">Technicians Only</option>
-                              </select>
-                          </div>
+                          <div><label className={labelStyle}>Target Audience</label><select className={inputStyle} value={bulkRecipients} onChange={e => setBulkRecipients(e.target.value)}><option value="all">All Users</option><option value="customer">Customers Only</option><option value="technician">Technicians Only</option></select></div>
                       </div>
-
-                      <div>
-                          <label className={labelStyle}>Subject Line</label>
-                          <input className={inputStyle} value={bulkSubject} onChange={e => setBulkSubject(e.target.value)} placeholder="Important Announcement..." />
-                      </div>
-
-                      <div>
-                          <label className={labelStyle}>Message Content</label>
-                          <textarea className={inputStyle} rows={6} value={bulkMessage} onChange={e => setBulkMessage(e.target.value)} placeholder="Type your message here..."></textarea>
-                          <p className="text-xs text-slate-400 mt-1 text-right">0 / 160 characters (for SMS)</p>
-                      </div>
-
+                      <div><label className={labelStyle}>Subject Line</label><input className={inputStyle} value={bulkSubject} onChange={e => setBulkSubject(e.target.value)} placeholder="Important Announcement..." /></div>
+                      <div><label className={labelStyle}>Message Content</label><textarea className={inputStyle} rows={6} value={bulkMessage} onChange={e => setBulkMessage(e.target.value)} placeholder="Type your message here..."></textarea><p className="text-xs text-slate-400 mt-1 text-right">0 / 160 characters (for SMS)</p></div>
                       <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                          <span className="text-sm text-slate-500">Estimated Recipients: <span className="font-bold text-slate-800">{
-                              bulkRecipients === 'all' ? users.length : 
-                              bulkRecipients === 'technician' ? technicians.length : 
-                              users.length - technicians.length
-                          }</span></span>
+                          <span className="text-sm text-slate-500">Estimated Recipients: <span className="font-bold text-slate-800">{bulkRecipients === 'all' ? users.length : bulkRecipients === 'technician' ? technicians.length : users.length - technicians.length}</span></span>
                           <Button onClick={handleSendBulkMessage}>Send Broadcast</Button>
                       </div>
                   </div>
               </div>
             )}
 
-            {/* CHATBOT TAB */}
             {activeTab === 'chatbot' && (
               <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
                       <div className="flex gap-4">
-                          <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-bold border border-blue-100">
-                              Total Entries: {knowledgeBase.length}
-                          </div>
-                          <div className="relative">
-                              <input 
-                                type="file" 
-                                id="kb-upload" 
-                                className="hidden" 
-                                accept=".json,.pdf,.docx" 
-                                onChange={handleKBUpload} 
-                              />
-                              <label htmlFor="kb-upload" className="cursor-pointer bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-200 flex items-center gap-2">
-                                  {uploading ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={16} />}
-                                  Upload JSON/PDF
-                              </label>
-                          </div>
+                          <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-bold border border-blue-100">Total Entries: {knowledgeBase.length}</div>
+                          <div className="relative"><input type="file" id="kb-upload" className="hidden" accept=".json,.pdf,.docx" onChange={handleKBUpload} /><label htmlFor="kb-upload" className="cursor-pointer bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-200 flex items-center gap-2">{uploading ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={16} />} Upload JSON/PDF</label></div>
                       </div>
                       <Button onClick={() => setIsAddingKB(true)} size="sm"><Plus size={16} className="mr-2"/> Add Entry</Button>
                   </div>
-
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* KB Table */}
                       <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                           <div className="p-4 border-b border-gray-100 font-bold text-slate-700">Knowledge Base</div>
                           <div className="max-h-[600px] overflow-y-auto">
                               <table className="w-full text-sm text-left text-slate-500">
-                                  <thead className="bg-slate-50 text-xs text-slate-700 uppercase">
-                                      <tr>
-                                          <th className="px-4 py-3">Category</th>
-                                          <th className="px-4 py-3">Keywords</th>
-                                          <th className="px-4 py-3">Answer Preview</th>
-                                          <th className="px-4 py-3">Action</th>
-                                      </tr>
-                                  </thead>
+                                  <thead className="bg-slate-50 text-xs text-slate-700 uppercase"><tr><th className="px-4 py-3">Category</th><th className="px-4 py-3">Keywords</th><th className="px-4 py-3">Answer Preview</th><th className="px-4 py-3">Action</th></tr></thead>
                                   <tbody>
                                       {knowledgeBase.map(entry => (
-                                          <tr key={entry.id} className="border-b hover:bg-slate-50">
-                                              <td className="px-4 py-3 font-bold text-slate-800">{entry.category}</td>
-                                              <td className="px-4 py-3">
-                                                  <div className="flex flex-wrap gap-1">
-                                                      {entry.keywords.slice(0, 3).map((k, i) => (
-                                                          <span key={i} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px]">{k}</span>
-                                                      ))}
-                                                      {entry.keywords.length > 3 && <span className="text-[10px] text-gray-400">+{entry.keywords.length - 3}</span>}
-                                                  </div>
-                                              </td>
-                                              <td className="px-4 py-3 truncate max-w-[200px]" title={entry.answer}>{entry.answer}</td>
-                                              <td className="px-4 py-3 text-right">
-                                                  <button onClick={() => handleDeleteKBEntry(entry.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={14}/></button>
-                                              </td>
-                                          </tr>
+                                          <tr key={entry.id} className="border-b hover:bg-slate-50"><td className="px-4 py-3 font-bold text-slate-800">{entry.category}</td><td className="px-4 py-3"><div className="flex flex-wrap gap-1">{entry.keywords.slice(0, 3).map((k, i) => <span key={i} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px]">{k}</span>)}{entry.keywords.length > 3 && <span className="text-[10px] text-gray-400">+{entry.keywords.length - 3}</span>}</div></td><td className="px-4 py-3 truncate max-w-[200px]" title={entry.answer}>{entry.answer}</td><td className="px-4 py-3 text-right"><button onClick={() => handleDeleteKBEntry(entry.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={14}/></button></td></tr>
                                       ))}
                                   </tbody>
                               </table>
                           </div>
                       </div>
-
-                      {/* Add Form (Inline) */}
                       {isAddingKB && (
                           <div className="bg-white rounded-xl border border-blue-200 shadow-lg p-6 h-fit">
                               <h3 className="font-bold text-lg mb-4 text-blue-900">New Response</h3>
                               <div className="space-y-4">
-                                  <div>
-                                      <label className={labelStyle}>Category</label>
-                                      <select className={inputStyle} value={newKBEntry.category} onChange={e => setNewKBEntry({...newKBEntry, category: e.target.value})}>
-                                          <option value="general">General</option>
-                                          <option value="pricing">Pricing</option>
-                                          <option value="troubleshooting">Troubleshooting</option>
-                                          <option value="service">Service Info</option>
-                                      </select>
-                                  </div>
-                                  <div>
-                                      <label className={labelStyle}>Keywords (Comma Separated)</label>
-                                      <input className={inputStyle} value={kbKeywordsInput} onChange={e => setKbKeywordsInput(e.target.value)} placeholder="price, cost, how much" />
-                                  </div>
-                                  <div>
-                                      <label className={labelStyle}>Answer / Response</label>
-                                      <textarea className={inputStyle} rows={5} value={newKBEntry.answer} onChange={e => setNewKBEntry({...newKBEntry, answer: e.target.value})} placeholder="The price is GHS..."></textarea>
-                                  </div>
-                                  <div className="flex gap-2">
-                                      <Button onClick={handleAddKBEntry} className="flex-1">Save Entry</Button>
-                                      <button onClick={() => setIsAddingKB(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
-                                  </div>
+                                  <div><label className={labelStyle}>Category</label><select className={inputStyle} value={newKBEntry.category} onChange={e => setNewKBEntry({...newKBEntry, category: e.target.value})}><option value="general">General</option><option value="pricing">Pricing</option><option value="troubleshooting">Troubleshooting</option><option value="service">Service Info</option></select></div>
+                                  <div><label className={labelStyle}>Keywords (Comma Separated)</label><input className={inputStyle} value={kbKeywordsInput} onChange={e => setKbKeywordsInput(e.target.value)} placeholder="price, cost, how much" /></div>
+                                  <div><label className={labelStyle}>Answer / Response</label><textarea className={inputStyle} rows={5} value={newKBEntry.answer} onChange={e => setNewKBEntry({...newKBEntry, answer: e.target.value})} placeholder="The price is GHS..."></textarea></div>
+                                  <div className="flex gap-2"><Button onClick={handleAddKBEntry} className="flex-1">Save Entry</Button><button onClick={() => setIsAddingKB(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button></div>
                               </div>
                           </div>
                       )}
@@ -1312,553 +1076,367 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* MEETINGS TAB */}
-            {activeTab === 'meetings' && (
-              <div className="space-y-6">
-                  <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
-                      <h3 className="font-bold text-slate-800">Scheduled Video Meetings</h3>
-                      <Button onClick={() => setIsAddingMeeting(true)} size="sm"><Plus size={16} className="mr-2"/> Schedule Meeting</Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {meetings.map(meeting => (
-                          <div key={meeting.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                              <div className="flex justify-between items-start mb-3">
-                                  <div className="bg-purple-50 text-purple-700 p-2 rounded-lg"><Video size={20} /></div>
-                                  <StatusBadge status={meeting.status} />
-                              </div>
-                              <h4 className="font-bold text-slate-900 text-lg mb-1">{meeting.title}</h4>
-                              <div className="text-sm text-slate-500 mb-4 flex items-center gap-2">
-                                  <Clock size={14} /> {meeting.date} at {meeting.time}
-                              </div>
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                  {meeting.attendees.slice(0, 3).map((att, i) => (
-                                      <span key={i} className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">{att}</span>
-                                  ))}
-                                  {meeting.attendees.length > 3 && <span className="text-xs text-gray-400">+{meeting.attendees.length - 3}</span>}
-                              </div>
-                              <div className="flex gap-2">
-                                  <a href={meeting.link} target="_blank" rel="noreferrer" className="flex-1 bg-slate-900 text-white text-center py-2 rounded-lg text-sm font-bold hover:bg-primary-600 transition">Start Meeting</a>
-                                  <button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:bg-red-50 px-3 rounded-lg"><Trash2 size={18} /></button>
-                              </div>
-                          </div>
-                      ))}
-                      {meetings.length === 0 && <div className="col-span-full text-center py-10 text-slate-400">No upcoming meetings.</div>}
-                  </div>
-              </div>
-            )}
-
-            {/* USER MANAGER TAB */}
             {activeTab === 'users' && (
-              <div className="space-y-6">
-                  <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-gray-200 gap-4">
-                      <div className="relative w-full md:w-auto">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                          <input 
-                              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none w-full md:w-64" 
-                              placeholder="Search users..."
-                              value={userSearch}
-                              onChange={e => setUserSearch(e.target.value)}
-                          />
-                      </div>
-                      <div className="flex gap-2 w-full md:w-auto">
-                          <Button onClick={() => setIsAddingTech(true)} size="sm" variant="outline"><UserCog size={16} className="mr-2"/> Add Technician</Button>
-                          <Button onClick={() => setIsAddingUser(true)} size="sm"><UserPlus size={16} className="mr-2"/> Add Customer</Button>
-                      </div>
+               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 flex justify-between items-center border-b">
+                     <h3 className="font-bold text-slate-800">User Management</h3>
+                     <div className="flex gap-2">
+                         <Button size="sm" variant="outline" onClick={() => setIsManagingRoles(true)}>Manage Roles</Button>
+                         <Button size="sm" onClick={() => { setNewUserData({ name: '', email: '', role: 'customer', password: '' }); setIsAddingUser(true); }}>Add Customer</Button>
+                         <Button size="sm" onClick={() => setIsAddingTech(true)}>Add Technician</Button>
+                     </div>
                   </div>
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left text-slate-500">
+                        <thead className="bg-slate-50 text-xs text-slate-700 uppercase"><tr><th className="px-6 py-3">User ID</th><th className="px-6 py-3">Name</th><th className="px-6 py-3">Email</th><th className="px-6 py-3">Role</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Action</th></tr></thead>
+                        <tbody>
+                           {users.map(user => (
+                              <tr key={user.id} className="border-b">
+                                 <td className="px-6 py-4 font-mono text-xs text-slate-400">{user.id || user.technicianId || 'N/A'}</td>
+                                 <td className="px-6 py-4 font-bold">{user.name}</td>
+                                 <td className="px-6 py-4">{user.email}</td>
+                                 <td className="px-6 py-4 capitalize">{user.role}</td>
+                                 <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${user.isApproved && user.status !== 'Suspended' ? 'bg-green-100 text-green-700' : (user.status === 'Suspended' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{user.status === 'Suspended' ? 'Suspended' : (user.isApproved ? 'Active' : 'Pending')}</span></td>
+                                 <td className="px-6 py-4 flex items-center gap-2">
+                                    {!user.isApproved && <button onClick={() => handleApproveUser(user.id)} className="text-blue-600 text-xs font-bold hover:underline">Approve</button>}
+                                    
+                                    {/* Disable/Enable Action */}
+                                    {user.isApproved && (
+                                        <button 
+                                            onClick={() => handleToggleUserStatus(user.id, user.status || 'Active')} 
+                                            className={`text-xs font-bold hover:underline ${user.status === 'Suspended' ? 'text-green-600' : 'text-red-500'}`}
+                                        >
+                                            {user.status === 'Suspended' ? 'Enable' : 'Disable'}
+                                        </button>
+                                    )}
 
-                  {/* Pending Approvals Section */}
-                  {users.some(u => u.role === 'technician' && !u.isApproved) && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                          <h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertCircle size={18} /> Pending Approvals</h4>
-                          <div className="space-y-2">
-                              {users.filter(u => u.role === 'technician' && !u.isApproved).map(u => (
-                                  <div key={u.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-yellow-100 shadow-sm">
-                                      <div>
-                                          <p className="font-bold text-slate-800">{u.name} <span className="text-xs text-slate-400 font-normal">({u.email})</span></p>
-                                          <p className="text-xs text-slate-500">Technician Request</p>
-                                      </div>
-                                      <button onClick={() => handleApproveUser(u.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700">Approve</button>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  )}
-
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      <table className="w-full text-sm text-left text-slate-500">
-                          <thead className="bg-slate-50 text-xs text-slate-700 uppercase">
-                              <tr>
-                                  <th className="px-6 py-3">Name</th>
-                                  <th className="px-6 py-3">Email</th>
-                                  <th className="px-6 py-3">Role</th>
-                                  <th className="px-6 py-3">Status</th>
-                                  <th className="px-6 py-3">Last Login</th>
+                                    <select
+                                        className="bg-gray-50 border border-gray-200 text-xs rounded p-1"
+                                        value={user.role}
+                                        onChange={(e) => handleAssignRole(user.id, e.target.value)}
+                                    >
+                                        <option value="customer">Customer</option>
+                                        <option value="technician">Technician</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                 </td>
                               </tr>
-                          </thead>
-                          <tbody>
-                              {users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(user => (
-                                  <tr key={user.id} className="border-b hover:bg-slate-50">
-                                      <td className="px-6 py-4 font-bold text-slate-800">{user.name}</td>
-                                      <td className="px-6 py-4">{user.email}</td>
-                                      <td className="px-6 py-4 capitalize">
-                                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : user.role === 'technician' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
-                                              {user.role}
-                                          </span>
-                                      </td>
-                                      <td className="px-6 py-4"><StatusBadge status={user.status} /></td>
-                                      <td className="px-6 py-4 text-xs text-slate-400">{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}</td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
+                           ))}
+                        </tbody>
+                     </table>
                   </div>
-              </div>
+               </div>
             )}
 
-            {/* QUOTES TAB */}
+            {activeTab === 'meetings' && (
+               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex justify-between mb-4">
+                     <h3 className="font-bold text-slate-800">Scheduled Meetings</h3>
+                     <Button size="sm" onClick={() => setIsAddingMeeting(true)}>Schedule Meeting</Button>
+                  </div>
+                  <div className="space-y-3">
+                     {meetings.map(meeting => (
+                        <div key={meeting.id} className="flex justify-between items-center border p-3 rounded-lg">
+                           <div><p className="font-bold">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.date} at {meeting.time} ({meeting.platform})</p></div>
+                           <div className="flex gap-2">
+                              <a href={meeting.link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline">Join Link</a>
+                              <button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button>
+                           </div>
+                        </div>
+                     ))}
+                     {meetings.length === 0 && <p className="text-slate-400 text-sm">No meetings scheduled.</p>}
+                  </div>
+               </div>
+            )}
+
             {activeTab === 'quotes' && (
-              <div className="space-y-6">
-                  <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
-                      <h3 className="font-bold text-slate-800">Generated Quotes</h3>
-                      <Button onClick={() => setIsCreatingQuote(true)} size="sm"><Plus size={16} className="mr-2"/> Create Quote</Button>
+               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex justify-between mb-4">
+                     <h3 className="font-bold text-slate-800">Generated Quotes</h3>
+                     <Button size="sm" onClick={() => setIsCreatingQuote(true)}>Create Quote</Button>
                   </div>
-
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      <table className="w-full text-sm text-left text-slate-500">
-                          <thead className="bg-slate-50 text-xs text-slate-700 uppercase">
-                              <tr>
-                                  <th className="px-6 py-3">Client</th>
-                                  <th className="px-6 py-3">Service Type</th>
-                                  <th className="px-6 py-3">Amount</th>
-                                  <th className="px-6 py-3">Items</th>
-                                  <th className="px-6 py-3 text-right">Actions</th>
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left text-slate-500">
+                        <thead className="bg-slate-50 text-xs text-slate-700 uppercase"><tr><th className="px-6 py-3">Client</th><th className="px-6 py-3">Service</th><th className="px-6 py-3">Total</th><th className="px-6 py-3">Date</th></tr></thead>
+                        <tbody>
+                           {quotes.map((quote, idx) => (
+                              <tr key={idx} className="border-b">
+                                 <td className="px-6 py-4 font-bold">{quote.name}</td>
+                                 <td className="px-6 py-4">{quote.serviceType}</td>
+                                 <td className="px-6 py-4">GHS {quote.grandTotal.toLocaleString()}</td>
+                                 <td className="px-6 py-4">{new Date(quote.date).toLocaleDateString()}</td>
                               </tr>
-                          </thead>
-                          <tbody>
-                              {quotes.map((quote, idx) => (
-                                  <tr key={idx} className="border-b hover:bg-slate-50">
-                                      <td className="px-6 py-4">
-                                          <p className="font-bold text-slate-800">{quote.name}</p>
-                                          <p className="text-xs text-slate-400">{quote.email}</p>
-                                      </td>
-                                      <td className="px-6 py-4">{quote.serviceType}</td>
-                                      <td className="px-6 py-4 font-bold text-slate-900">GHS {quote.grandTotal.toLocaleString()}</td>
-                                      <td className="px-6 py-4 text-xs text-slate-500">{quote.items.length} items</td>
-                                      <td className="px-6 py-4 text-right">
-                                          <button onClick={() => generateInvoice(quote)} className="text-primary-600 hover:underline text-xs font-bold flex items-center justify-end gap-1">
-                                              <Download size={14} /> PDF
-                                          </button>
-                                      </td>
-                                  </tr>
-                              ))}
-                              {quotes.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-slate-400">No quotes generated yet.</td></tr>}
-                          </tbody>
-                      </table>
+                           ))}
+                        </tbody>
+                     </table>
                   </div>
-              </div>
+               </div>
             )}
 
-            {/* INBOX TAB */}
             {activeTab === 'messages' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
-                  {/* List */}
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-y-auto">
-                      {messages.map(msg => (
-                          <div 
-                              key={msg.id} 
-                              onClick={() => setReplyingMessage(msg.id)}
-                              className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-slate-50 transition ${replyingMessage === msg.id ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''}`}
-                          >
-                              <div className="flex justify-between items-start mb-1">
-                                  <span className="font-bold text-slate-800 text-sm">{msg.sender}</span>
-                                  <span className="text-[10px] text-slate-400">{new Date(msg.date).toLocaleDateString()}</span>
+               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-bold text-slate-800 mb-4">Support Messages</h3>
+                  <div className="space-y-4">
+                     {messages.map(msg => (
+                        <div key={msg.id} className="border p-4 rounded-lg hover:shadow-sm transition">
+                           <div className="flex justify-between items-start mb-2">
+                              <div><h4 className="font-bold">{msg.subject}</h4><p className="text-xs text-slate-500">From: {msg.sender}</p></div>
+                              <StatusBadge status={msg.status} />
+                           </div>
+                           <p className="text-sm text-slate-700 mb-3">{msg.message}</p>
+                           {msg.status === 'Open' && (
+                              <div className="flex gap-2">
+                                 <input className="flex-1 border rounded px-3 py-1 text-sm" placeholder="Type reply..." value={replyingMessage === msg.id ? replyText : ''} onChange={e => {setReplyingMessage(msg.id); setReplyText(e.target.value)}} />
+                                 <Button size="sm" onClick={() => handleSendReply(msg.id)}>Reply</Button>
                               </div>
-                              <p className="text-xs text-slate-600 font-medium mb-1 truncate">{msg.subject}</p>
-                              <p className="text-xs text-slate-400 truncate">{msg.message}</p>
-                              {msg.status === 'Open' && <span className="mt-2 inline-block bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">New</span>}
-                          </div>
-                      ))}
+                           )}
+                        </div>
+                     ))}
                   </div>
-
-                  {/* Detail View */}
-                  <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 flex flex-col">
-                      {replyingMessage ? (
-                          (() => {
-                              const msg = messages.find(m => m.id === replyingMessage);
-                              return (
-                                  <>
-                                      <div className="p-6 border-b border-gray-100">
-                                          <div className="flex justify-between items-start mb-4">
-                                              <div>
-                                                  <h3 className="text-xl font-bold text-slate-900">{msg?.subject}</h3>
-                                                  <p className="text-sm text-slate-500">From: {msg?.sender} &lt;{msg?.email || 'No Email'}&gt;</p>
-                                              </div>
-                                              <StatusBadge status={msg?.status} />
-                                          </div>
-                                          <div className="bg-slate-50 p-4 rounded-lg text-sm text-slate-700 whitespace-pre-wrap">
-                                              {msg?.message}
-                                          </div>
-                                      </div>
-                                      
-                                      <div className="flex-grow overflow-y-auto p-6 space-y-4">
-                                          {msg?.replies?.map((reply: any, i: number) => (
-                                              <div key={i} className={`flex ${reply.sender === 'Admin' ? 'justify-end' : 'justify-start'}`}>
-                                                  <div className={`max-w-[80%] p-3 rounded-xl text-sm ${reply.sender === 'Admin' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-100 text-slate-800 rounded-bl-none'}`}>
-                                                      <p>{reply.text}</p>
-                                                      <span className="text-[10px] opacity-70 block text-right mt-1">{new Date(reply.date).toLocaleTimeString()}</span>
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
-
-                                      <div className="p-4 border-t border-gray-100 bg-gray-50">
-                                          <div className="flex gap-2">
-                                              <textarea 
-                                                  className="flex-grow p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                                  placeholder="Type your reply..."
-                                                  rows={2}
-                                                  value={replyText}
-                                                  onChange={e => setReplyText(e.target.value)}
-                                              ></textarea>
-                                              <Button onClick={() => handleSendReply(msg.id)} disabled={!replyText}>Send</Button>
-                                          </div>
-                                      </div>
-                                  </>
-                              );
-                          })()
-                      ) : (
-                          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                              <MessageSquare size={48} className="mb-4 opacity-20" />
-                              <p>Select a message to view details</p>
-                          </div>
-                      )}
-                  </div>
-              </div>
+               </div>
             )}
 
           </div>
         )}
       </main>
 
-      {/* MODALS */}
-      
-      {/* 1. REMOTE ACCESS MODAL */}
+      {/* REMOTE MODAL */}
       {showRemoteModal && (
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
                   <h3 className="text-xl font-bold mb-4 text-slate-900">Remote Session</h3>
                   <input className="w-full border rounded px-3 py-2 mb-4" placeholder="Session ID" value={remoteId} onChange={e => setRemoteId(e.target.value)} />
-                  <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded text-xs font-bold hover:bg-red-600 transition">AnyDesk</button>
-                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded text-xs font-bold hover:bg-blue-700 transition">TeamViewer</button>
-                      <button onClick={() => handleLaunchRemote('rustdesk')} className="bg-slate-800 text-white py-2 rounded text-xs font-bold hover:bg-slate-900 transition">RustDesk</button>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded">AnyDesk</button>
+                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded">TeamViewer</button>
                   </div>
-                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-4 text-slate-500 text-sm hover:text-slate-800">Cancel</button>
+                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-2 text-slate-500 text-sm">Cancel</button>
               </div>
           </div>
       )}
 
-      {/* 2. ADD/EDIT PRODUCT MODAL */}
-      {(isAddingProduct || editingProduct) && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
-              <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                 <label className={labelStyle}>Product Name</label>
-                 <input className={inputStyle} value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Category</label>
-                 <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>
-                    {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                 </select>
-               </div>
-               <div>
-                 <label className={labelStyle}>Price (GHS)</label>
-                 <input type="number" className={inputStyle} value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: Number(e.target.value)}) : setNewProduct({...newProduct, price: Number(e.target.value)})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Stock Quantity</label>
-                 <input type="number" className={inputStyle} value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: Number(e.target.value)}) : setNewProduct({...newProduct, stock: Number(e.target.value)})} />
-               </div>
-               <div className="col-span-2">
-                 <label className={labelStyle}>Description</label>
-                 <textarea className={inputStyle} rows={3} value={editingProduct ? editingProduct.description : newProduct.description} onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})}></textarea>
-               </div>
-               <div className="col-span-2">
-                 <label className={labelStyle}>Product Image</label>
-                 <div className="flex gap-4 items-center">
-                    <input type="file" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
-                    {uploading && <RefreshCw size={16} className="animate-spin text-primary-600" />}
-                 </div>
-                 {/* Preview */}
-                 {(editingProduct?.image || newProduct.image) && (
-                    <img src={editingProduct ? editingProduct.image : newProduct.image} alt="Preview" className="h-20 w-auto mt-2 rounded border" />
-                 )}
-               </div>
-            </div>
+      {/* MANAGE ROLES MODAL */}
+      {isManagingRoles && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                  <h3 className="font-bold text-lg mb-4 text-slate-900">Manage Definitions</h3>
+                  
+                  <div className="space-y-4 mb-6">
+                      <div>
+                          <label className={labelStyle}>Technician Roles</label>
+                          <div className="flex flex-wrap gap-2 mb-2 p-2 bg-slate-50 rounded border border-gray-100 max-h-24 overflow-y-auto">
+                              {techRoles.map((r, i) => <span key={i} className="bg-white border text-xs px-2 py-1 rounded shadow-sm">{r}</span>)}
+                          </div>
+                          <div className="flex gap-2">
+                              <input className={inputStyle} placeholder="Add Role..." value={newRoleInput} onChange={e => setNewRoleInput(e.target.value)} />
+                              <button onClick={handleAddRole} className="bg-primary-600 text-white px-3 rounded-lg"><Plus size={18} /></button>
+                          </div>
+                      </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-               <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-               <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} disabled={uploading}>
-                 {uploading ? 'Uploading...' : (editingProduct ? 'Save Changes' : 'Create Product')}
-               </Button>
-            </div>
+                      <div>
+                          <label className={labelStyle}>Departments</label>
+                          <div className="flex flex-wrap gap-2 mb-2 p-2 bg-slate-50 rounded border border-gray-100 max-h-24 overflow-y-auto">
+                              {departments.map((d, i) => <span key={i} className="bg-white border text-xs px-2 py-1 rounded shadow-sm">{d}</span>)}
+                          </div>
+                          <div className="flex gap-2">
+                              <input className={inputStyle} placeholder="Add Department..." value={newDeptInput} onChange={e => setNewDeptInput(e.target.value)} />
+                              <button onClick={handleAddDept} className="bg-primary-600 text-white px-3 rounded-lg"><Plus size={18} /></button>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                      <Button onClick={() => setIsManagingRoles(false)}>Close Manager</Button>
+                  </div>
+              </div>
           </div>
-        </div>
       )}
 
-      {/* 3. SCHEDULE MEETING MODAL */}
-      {isAddingMeeting && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Schedule Meeting</h3>
-              <button onClick={() => setIsAddingMeeting(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            <div className="space-y-4">
-               <div>
-                 <label className={labelStyle}>Meeting Title</label>
-                 <input className={inputStyle} placeholder="e.g., Client Onboarding" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className={labelStyle}>Date</label>
-                   <input type="date" className={inputStyle} value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
-                 </div>
-                 <div>
-                   <label className={labelStyle}>Time</label>
-                   <input type="time" className={inputStyle} value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
-                 </div>
-               </div>
-               <div>
-                 <label className={labelStyle}>Platform</label>
-                 <select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}>
-                    <option value="Zoom">Zoom</option>
-                    <option value="Google Meet">Google Meet</option>
-                    <option value="Microsoft Teams">Microsoft Teams</option>
-                 </select>
-               </div>
-               <div>
-                 <label className={labelStyle}>Attendees (Emails comma separated)</label>
-                 <input className={inputStyle} placeholder="client@email.com, tech@buzzitech.com" value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
-               </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-               <button onClick={() => setIsAddingMeeting(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-               <Button onClick={handleScheduleMeeting}>Schedule</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. ADD USER MODAL */}
-      {isAddingUser && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Add New Customer</h3>
-              <button onClick={() => setIsAddingUser(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            <div className="space-y-4">
-               <div>
-                 <label className={labelStyle}>Full Name</label>
-                 <input className={inputStyle} placeholder="John Doe" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Email Address</label>
-                 <input type="email" className={inputStyle} placeholder="john@example.com" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Temporary Password</label>
-                 <input type="password" className={inputStyle} value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
-               </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-               <button onClick={() => setIsAddingUser(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-               <Button onClick={handleCreateUser}>Create Account</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. ADD TECHNICIAN MODAL */}
+      {/* TECHNICIAN MODAL */}
       {isAddingTech && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Add Technician</h3>
-              <button onClick={() => setIsAddingTech(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div className="col-span-2">
-                 <label className={labelStyle}>Full Name</label>
-                 <input className={inputStyle} value={newTechData.name} onChange={e => setNewTechData({...newTechData, name: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Email</label>
-                 <input type="email" className={inputStyle} value={newTechData.email} onChange={e => setNewTechData({...newTechData, email: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Phone</label>
-                 <input className={inputStyle} value={newTechData.phone} onChange={e => setNewTechData({...newTechData, phone: e.target.value})} />
-               </div>
-               <div>
-                 <label className={labelStyle}>Role</label>
-                 <select className={inputStyle} value={newTechData.role} onChange={e => setNewTechData({...newTechData, role: e.target.value})}>
-                    {TECH_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                 </select>
-               </div>
-               <div>
-                 <label className={labelStyle}>Department</label>
-                 <select className={inputStyle} value={newTechData.department} onChange={e => setNewTechData({...newTechData, department: e.target.value})}>
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                 </select>
-               </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-               <button onClick={() => setIsAddingTech(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-               <Button onClick={handleAddTechnician}>Add Technician</Button>
-            </div>
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                  <h3 className="font-bold text-lg mb-4">Add New Technician</h3>
+                  <div className="space-y-3">
+                      <input className={inputStyle} placeholder="Full Name" value={newTechData.name} onChange={e => setNewTechData({...newTechData, name: e.target.value})} />
+                      <input className={inputStyle} placeholder="Email" type="email" value={newTechData.email} onChange={e => setNewTechData({...newTechData, email: e.target.value})} />
+                      <input className={inputStyle} placeholder="Phone" value={newTechData.phone} onChange={e => setNewTechData({...newTechData, phone: e.target.value})} />
+                      <input className={inputStyle} placeholder="Login Password" type="password" value={newTechData.password} onChange={e => setNewTechData({...newTechData, password: e.target.value})} />
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                          <select className={inputStyle} value={newTechData.department} onChange={e => setNewTechData({...newTechData, department: e.target.value})}>
+                              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                          <select className={inputStyle} value={newTechData.role} onChange={e => setNewTechData({...newTechData, role: e.target.value})}>
+                              {techRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                          <Button onClick={handleAddTechnician} className="flex-1">Save Technician</Button>
+                          <button onClick={() => setIsAddingTech(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
+                      </div>
+                  </div>
+              </div>
           </div>
-        </div>
       )}
 
-      {/* 6. CREATE TICKET MODAL */}
+      {/* USER MODAL */}
+      {isAddingUser && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                  <h3 className="font-bold text-lg mb-4">Add New Customer</h3>
+                  <div className="space-y-3">
+                      <input className={inputStyle} placeholder="Full Name" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
+                      <input className={inputStyle} placeholder="Email" type="email" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
+                      <input className={inputStyle} placeholder="Password" type="password" value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
+                      <input className={`${inputStyle} bg-gray-100 text-gray-500 cursor-not-allowed`} value="Customer" readOnly />
+                      
+                      <div className="flex gap-2 mt-4">
+                          <Button onClick={handleCreateUser} className="flex-1">Create Customer</Button>
+                          <button onClick={() => setIsAddingUser(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* TICKET / BOOKING MODAL */}
       {isAddingBooking && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Create Support Ticket</h3>
-              <button onClick={() => setIsAddingBooking(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            <div className="space-y-4">
-                <div>
-                    <label className={labelStyle}>Select User (Optional)</label>
-                    <select className={inputStyle} onChange={(e) => handleUserSelectForTicket(e.target.value)}>
-                        <option value="new">-- New / Unregistered Client --</option>
-                        {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className={labelStyle}>Client Name</label>
-                    <input className={inputStyle} value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} placeholder="Full Name" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelStyle}>Email</label>
-                        <input className={inputStyle} value={newBookingData.email} onChange={e => setNewBookingData({...newBookingData, email: e.target.value})} placeholder="Email" />
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Phone</label>
-                        <input className={inputStyle} value={newBookingData.phone} onChange={e => setNewBookingData({...newBookingData, phone: e.target.value})} placeholder="Phone" />
-                    </div>
-                </div>
-                <div>
-                    <label className={labelStyle}>Issue / Service Type</label>
-                    <input className={inputStyle} value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} placeholder="e.g. CCTV Maintenance" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelStyle}>Date</label>
-                        <input type="date" className={inputStyle} value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Time</label>
-                        <input type="time" className={inputStyle} value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
-                    </div>
-                </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-               <button onClick={() => setIsAddingBooking(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-               <Button onClick={handleCreateBooking} disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create Ticket'}</Button>
-            </div>
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                  <h3 className="font-bold text-lg mb-4">Create New Ticket</h3>
+                  <div className="space-y-3">
+                      <div>
+                          <label className={labelStyle}>Select User</label>
+                          <select className={inputStyle} onChange={(e) => handleUserSelectForTicket(e.target.value)}>
+                              <option value="new">-- New User --</option>
+                              {users.filter(u => u.role === 'customer').map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+                          </select>
+                      </div>
+                      <input className={inputStyle} placeholder="Client Name" value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} />
+                      <input className={inputStyle} placeholder="Client Phone" value={newBookingData.phone} onChange={e => setNewBookingData({...newBookingData, phone: e.target.value})} />
+                      <input className={inputStyle} placeholder="Client Email" value={newBookingData.email} onChange={e => setNewBookingData({...newBookingData, email: e.target.value})} />
+                      <select className={inputStyle} value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})}>
+                          <option value="">Select Service...</option>
+                          <option value="CCTV Installation">CCTV Installation</option>
+                          <option value="Starlink Setup">Starlink Setup</option>
+                          <option value="Networking">Networking</option>
+                          <option value="Computer Repair">Computer Repair</option>
+                          <option value="Other">Other</option>
+                      </select>
+                      <div className="grid grid-cols-2 gap-3">
+                          <input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
+                          <input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
+                      </div>
+                      <select className={inputStyle} value={newBookingData.technician} onChange={e => setNewBookingData({...newBookingData, technician: e.target.value})}>
+                          <option value="">Assign Technician (Optional)</option>
+                          {technicians.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                      </select>
+                      <div className="flex gap-2 mt-4">
+                          <Button onClick={handleCreateBooking} className="flex-1" disabled={isSubmitting}>
+                              {isSubmitting ? 'Creating...' : 'Create Ticket'}
+                          </Button>
+                          <button onClick={() => setIsAddingBooking(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
+                      </div>
+                  </div>
+              </div>
           </div>
-        </div>
       )}
 
-      {/* 7. ADMIN QUOTE GENERATOR MODAL */}
+      {/* QUOTE GENERATOR MODAL */}
       {isCreatingQuote && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Generate Quote / Invoice</h3>
-              <button onClick={() => setIsCreatingQuote(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               {/* Client Info */}
-               <div className="space-y-4">
-                   <h4 className="font-bold text-gray-700 border-b pb-2">Client Details</h4>
-                   <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
-                   <input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
-                   <input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
-                   <select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}>
-                       <option value="General Quote">General Quote</option>
-                       <option value="CCTV Installation">CCTV Installation</option>
-                       <option value="Networking">Networking</option>
-                       <option value="Starlink">Starlink</option>
-                   </select>
-               </div>
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <h3 className="font-bold text-lg mb-4">Generate New Quote</h3>
+                  
+                  {/* Client Details */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                      <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
+                      <input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
+                      <input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
+                      <select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}>
+                          <option value="General">General Quote</option>
+                          {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                  </div>
 
-               {/* Line Item Adder */}
-               <div className="space-y-4">
-                   <h4 className="font-bold text-gray-700 border-b pb-2">Add Items</h4>
-                   <div className="flex gap-2">
-                       <input className={`${inputStyle} flex-grow`} placeholder="Item Name" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
-                       <input type="number" className={`${inputStyle} w-24`} placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
-                   </div>
-                   <div className="flex gap-2">
-                       <input type="number" className={`${inputStyle} w-24`} placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
-                       <select className={`${inputStyle} flex-grow`} value={newQuoteItem.category} onChange={e => setNewQuoteItem({...newQuoteItem, category: e.target.value})}>
-                           <option value="Hardware">Hardware</option>
-                           <option value="Service">Service/Labor</option>
-                       </select>
-                       <button onClick={handleAddQuoteItem} className="bg-primary-600 text-white px-4 rounded-lg hover:bg-primary-700"><Plus /></button>
-                   </div>
-               </div>
-            </div>
+                  {/* Add Items */}
+                  <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200">
+                      <h4 className="font-bold text-sm text-slate-700 mb-2">Add Line Item</h4>
+                      <div className="grid grid-cols-4 gap-2 mb-2">
+                          <input className={`${inputStyle} col-span-2`} placeholder="Item Description" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
+                          <input className={inputStyle} type="number" placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
+                          <input className={inputStyle} type="number" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
+                      </div>
+                      <button onClick={handleAddQuoteItem} className="w-full bg-slate-200 text-slate-700 py-2 rounded text-sm font-bold hover:bg-slate-300">+ Add Item</button>
+                  </div>
 
-            {/* Items List */}
-            <div className="mt-6 bg-slate-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="text-left text-slate-500">
-                            <th>Item</th>
-                            <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {newQuoteData.items?.map((item, idx) => (
-                            <tr key={idx} className="border-b border-slate-200 last:border-0">
-                                <td className="py-2">{item.name}</td>
-                                <td>{item.quantity}</td>
-                                <td>{item.price}</td>
-                                <td>{(item.price * item.quantity).toLocaleString()}</td>
-                            </tr>
-                        ))}
-                        {(!newQuoteData.items || newQuoteData.items.length === 0) && <tr><td colSpan={4} className="text-center py-4 text-slate-400">No items added.</td></tr>}
-                    </tbody>
-                </table>
-            </div>
+                  {/* Items List */}
+                  <div className="mb-4">
+                      <table className="w-full text-sm">
+                          <thead><tr className="text-left text-slate-500"><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+                          <tbody>
+                              {(newQuoteData.items || []).map((item, idx) => (
+                                  <tr key={idx} className="border-b">
+                                      <td className="py-2">{item.name}</td>
+                                      <td>{item.quantity}</td>
+                                      <td>{item.price}</td>
+                                      <td>{(item.price * item.quantity).toLocaleString()}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                      <div className="text-right font-bold text-lg mt-2">Total: GHS {(newQuoteData.grandTotal || 0).toLocaleString()}</div>
+                  </div>
 
-            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-                <div className="text-xl font-bold text-slate-900">Total: GHS {newQuoteData.grandTotal?.toLocaleString()}</div>
-                <div className="flex gap-3">
-                    <button onClick={() => setIsCreatingQuote(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
-                    <Button onClick={handleGenerateAdminQuote}>Generate & Download</Button>
-                </div>
-            </div>
+                  <div className="flex gap-2">
+                      <Button onClick={handleGenerateAdminQuote} className="flex-1">Generate PDF & Save</Button>
+                      <button onClick={() => setIsCreatingQuote(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
+                  </div>
+              </div>
           </div>
-        </div>
+      )}
+
+      {/* PRODUCT MODAL (ADD & EDIT) */}
+      {(isAddingProduct || editingProduct) && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                  <h3 className="font-bold text-lg mb-4">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
+                  <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                          <input className={inputStyle} placeholder="Product Name" value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
+                          <input className={inputStyle} placeholder="Brand" value={editingProduct ? editingProduct.brand : newProduct.brand} onChange={e => editingProduct ? setEditingProduct({...editingProduct, brand: e.target.value}) : setNewProduct({...newProduct, brand: e.target.value})} />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                          <input className={inputStyle} placeholder="Price" type="number" value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: Number(e.target.value)}) : setNewProduct({...newProduct, price: Number(e.target.value)})} />
+                          <input className={inputStyle} placeholder="Orig Price" type="number" value={editingProduct ? editingProduct.originalPrice : newProduct.originalPrice} onChange={e => editingProduct ? setEditingProduct({...editingProduct, originalPrice: Number(e.target.value)}) : setNewProduct({...newProduct, originalPrice: Number(e.target.value)})} />
+                          <input className={inputStyle} placeholder="Stock" type="number" value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: Number(e.target.value)}) : setNewProduct({...newProduct, stock: Number(e.target.value)})} />
+                      </div>
+                      <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>
+                          {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <textarea className={inputStyle} rows={3} placeholder="Description" value={editingProduct ? editingProduct.description : newProduct.description} onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})}></textarea>
+                      
+                      {/* Image Upload */}
+                      <div>
+                          <label className={labelStyle}>Product Image</label>
+                          <div className="flex gap-2">
+                              <input className={inputStyle} placeholder="Image URL" value={editingProduct ? editingProduct.image : newProduct.image} onChange={e => editingProduct ? setEditingProduct({...editingProduct, image: e.target.value}) : setNewProduct({...newProduct, image: e.target.value})} />
+                              <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300">
+                                  <Upload size={20} className="text-slate-600" />
+                                  <input type="file" className="hidden" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} />
+                              </label>
+                          </div>
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                          <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} className="flex-1">{editingProduct ? 'Save Changes' : 'Create Product'}</Button>
+                          <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
       )}
 
     </div>

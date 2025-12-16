@@ -53,8 +53,10 @@ app.use(morgan('dev'));
 
 // Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 300, // Limit each IP to 300 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api', limiter);
