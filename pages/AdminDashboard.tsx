@@ -5,7 +5,7 @@ import {
   Calendar, MessageSquare, FileText, TrendingUp, Users, DollarSign,
   Phone, Mail, Clock, CheckCircle, AlertCircle, Edit2, Image, Save, X, Ticket,
   Settings, CreditCard, Webhook, Server, Plus, Star, Link as LinkIcon, Upload, UserPlus, Truck, Monitor, Video, ShieldCheck, Trash2,
-  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin, EyeOff, UserCheck, Globe, Shield, Zap, Copy, ImagePlus, ToggleLeft, ToggleRight, Wrench
+  Bot, FileJson, UploadCloud, Smartphone, Radio, Activity, Eye, File, Megaphone, UserCog, MoreVertical, Briefcase, Download, Building, ArrowRight, Smile, Paperclip, Lock, Key, Send, Search, Filter, MapPin, EyeOff, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { api } from '../services/api';
@@ -228,7 +228,6 @@ const AdminDashboard: React.FC = () => {
   // --- ACTIONS ---
 
   const handleUpdateBookingStatus = async (bookingId: string, newStatus: string) => {
-      // In a real app, you'd call an API. Mocking local update:
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 
@@ -251,6 +250,22 @@ const AdminDashboard: React.FC = () => {
      } catch (e) {
        alert("Failed to assign technician");
      }
+  };
+
+  const handleUserSelectForTicket = (userId: string) => {
+      if (userId === 'new') {
+          setNewBookingData(prev => ({ ...prev, name: '', email: '', phone: '' }));
+          return;
+      }
+      const user = users.find(u => u.id === userId);
+      if (user) {
+          setNewBookingData(prev => ({ 
+              ...prev, 
+              name: user.name, 
+              email: user.email, 
+              phone: user.phone || '' 
+          }));
+      }
   };
 
   const handleCreateBooking = async () => {
@@ -430,7 +445,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   // --- CHAT ACTIONS ---
-  const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer') => {
+  const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer' | 'rustdesk') => {
       if (!remoteId) {
           alert("Please enter a Session ID");
           return;
@@ -443,6 +458,9 @@ const AdminDashboard: React.FC = () => {
       if (tool === 'anydesk') {
           protocolUrl = `anydesk:${cleanId}`;
           fallbackUrl = 'https://anydesk.com/en/downloads';
+      } else if (tool === 'rustdesk') {
+          protocolUrl = `rustdesk://${cleanId}`;
+          fallbackUrl = 'https://rustdesk.com/download';
       } else {
           protocolUrl = `teamviewer8://${cleanId}`; 
           fallbackUrl = 'https://www.teamviewer.com/en/download/';
@@ -575,8 +593,6 @@ const AdminDashboard: React.FC = () => {
           alert("Failed to send bulk message");
       }
   };
-
-  // --- Missing Handlers Definitions ---
 
   const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -839,6 +855,63 @@ const AdminDashboard: React.FC = () => {
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* BOOKINGS TAB (Service Desk) */}
+            {activeTab === 'bookings' && (
+               <div className="space-y-6">
+                  <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-4">
+                          <h3 className="font-bold text-slate-800">Support Tickets</h3>
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">{bookings.length} Total</span>
+                      </div>
+                      <Button onClick={() => setIsAddingBooking(true)} size="sm"><Plus size={16} className="mr-2"/> New Ticket</Button>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-sm text-left text-slate-500">
+                          <thead className="bg-slate-50 text-xs text-slate-700 uppercase">
+                              <tr>
+                                  <th className="px-6 py-3">Ticket ID</th>
+                                  <th className="px-6 py-3">Client</th>
+                                  <th className="px-6 py-3">Service</th>
+                                  <th className="px-6 py-3">Technician</th>
+                                  <th className="px-6 py-3">Status</th>
+                                  <th className="px-6 py-3 text-right">Actions</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {bookings.map(booking => (
+                                  <tr key={booking.id} className="border-b hover:bg-slate-50">
+                                      <td className="px-6 py-4 font-mono text-xs">{booking.id}</td>
+                                      <td className="px-6 py-4">
+                                          <p className="font-bold text-slate-800">{booking.name}</p>
+                                          <p className="text-xs text-slate-400">{booking.phone}</p>
+                                      </td>
+                                      <td className="px-6 py-4">{booking.serviceType}</td>
+                                      <td className="px-6 py-4">
+                                          <select 
+                                              className="bg-gray-50 border border-gray-200 text-xs rounded p-1 w-32"
+                                              value={booking.technician || 'Unassigned'}
+                                              onChange={(e) => handleAssignTechnician(booking.id, e.target.value)}
+                                          >
+                                              <option value="Unassigned">Unassigned</option>
+                                              {technicians.map(t => (
+                                                  <option key={t.id} value={t.name}>{t.name}</option>
+                                              ))}
+                                          </select>
+                                      </td>
+                                      <td className="px-6 py-4"><StatusBadge status={booking.status} /></td>
+                                      <td className="px-6 py-4 text-right">
+                                          <button onClick={() => handleDeleteBooking(booking.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16}/></button>
+                                      </td>
+                                  </tr>
+                              ))}
+                              {bookings.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-slate-400">No active tickets found.</td></tr>}
+                          </tbody>
+                      </table>
+                  </div>
+               </div>
             )}
 
             {/* INVENTORY TAB */}
@@ -1228,7 +1301,7 @@ const AdminDashboard: React.FC = () => {
                           />
                       </div>
                       <div className="flex gap-2 w-full md:w-auto">
-                          <Button onClick={() => setIsAddingTech(true)} size="sm" variant="outline"><Wrench size={16} className="mr-2"/> Add Technician</Button>
+                          <Button onClick={() => setIsAddingTech(true)} size="sm" variant="outline"><UserCog size={16} className="mr-2"/> Add Technician</Button>
                           <Button onClick={() => setIsAddingUser(true)} size="sm"><UserPlus size={16} className="mr-2"/> Add Customer</Button>
                       </div>
                   </div>
@@ -1403,198 +1476,328 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Other Tabs (Preserved in full implementation) */}
-            {activeTab === 'bookings' && (
-               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="flex justify-between mb-4">
-                     <h3 className="font-bold text-slate-800">Support Tickets</h3>
-                     <button onClick={() => setIsAddingBooking(true)} className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-primary-700">New Ticket</button>
-                  </div>
-                  {/* Table logic similar to Orders */}
-                  <div className="text-center py-10 text-slate-400">Tickets listed here...</div>
-               </div>
-            )}
-
           </div>
         )}
       </main>
 
-      {/* --- ALL MODALS --- */}
-
-      {/* Add/Edit Product Modal */}
-      {(isAddingProduct || editingProduct) && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl w-full max-w-lg p-6 animate-in zoom-in-95 overflow-y-auto max-h-[90vh]">
-                  <h3 className="text-xl font-bold mb-4">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
-                  <div className="space-y-4">
-                      {/* Image Upload */}
-                      <div className="flex justify-center">
-                          <label className="cursor-pointer group relative w-32 h-32 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 hover:border-blue-500">
-                              <img src={editingProduct?.image || newProduct.image || ''} className="w-full h-full object-cover" alt="" />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white text-xs font-bold">Change</div>
-                              <input type="file" className="hidden" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} />
-                          </label>
-                      </div>
-
-                      <input className={inputStyle} placeholder="Product Name" value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                          <input type="number" className={inputStyle} placeholder="Price" value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: parseFloat(e.target.value)}) : setNewProduct({...newProduct, price: parseFloat(e.target.value)})} />
-                          <input type="number" className={inputStyle} placeholder="Original Price" value={editingProduct ? editingProduct.originalPrice : newProduct.originalPrice} onChange={e => editingProduct ? setEditingProduct({...editingProduct, originalPrice: parseFloat(e.target.value)}) : setNewProduct({...newProduct, originalPrice: parseFloat(e.target.value)})} />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                          <input type="number" className={inputStyle} placeholder="Stock" value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: parseInt(e.target.value)}) : setNewProduct({...newProduct, stock: parseInt(e.target.value)})} />
-                          <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>
-                              {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                      </div>
-
-                      <textarea className={inputStyle} rows={3} placeholder="Description" value={editingProduct ? editingProduct.description : newProduct.description} onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})}></textarea>
-
-                      <div className="flex gap-2 justify-end">
-                          <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 py-2 text-slate-500">Cancel</button>
-                          <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct}>{editingProduct ? 'Save Changes' : 'Create Product'}</Button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Create Quote Modal */}
-      {isCreatingQuote && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl w-full max-w-3xl p-6 animate-in zoom-in-95 overflow-y-auto max-h-[90vh]">
-                  <h3 className="text-xl font-bold mb-4">Generate Admin Quote</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                          <h4 className="font-bold text-sm uppercase text-slate-500">Client Details</h4>
-                          <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
-                          <input className={inputStyle} placeholder="Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
-                          <input className={inputStyle} placeholder="Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
-                          <select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}>
-                              <option>General Quote</option>
-                              <option>CCTV Installation</option>
-                              <option>Starlink Setup</option>
-                              <option>Networking</option>
-                          </select>
-                      </div>
-                      <div className="space-y-4">
-                          <h4 className="font-bold text-sm uppercase text-slate-500">Add Items</h4>
-                          <div className="flex gap-2">
-                              <input className={inputStyle} placeholder="Item Name" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
-                              <input type="number" className="w-24 border rounded-lg px-2" placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: parseFloat(e.target.value)})} />
-                              <input type="number" className="w-16 border rounded-lg px-2" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: parseInt(e.target.value)})} />
-                          </div>
-                          <Button onClick={handleAddQuoteItem} size="sm" variant="secondary" className="w-full">Add Item to List</Button>
-                          
-                          <div className="bg-slate-50 p-3 rounded-lg h-40 overflow-y-auto border border-gray-200">
-                              {newQuoteData.items?.map((item, idx) => (
-                                  <div key={idx} className="flex justify-between text-sm border-b border-gray-200 pb-1 mb-1">
-                                      <span>{item.name} x{item.quantity}</span>
-                                      <span className="font-bold">{(item.price * item.quantity).toLocaleString()}</span>
-                                  </div>
-                              ))}
-                          </div>
-                          <div className="flex justify-between items-center font-bold text-lg">
-                              <span>Total:</span>
-                              <span>GHS {newQuoteData.grandTotal?.toLocaleString()}</span>
-                          </div>
-                      </div>
-                  </div>
-                  <div className="flex gap-2 justify-end mt-6">
-                      <button onClick={() => setIsCreatingQuote(false)} className="px-4 py-2 text-slate-500">Cancel</button>
-                      <Button onClick={handleGenerateAdminQuote}>Generate & Download PDF</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Schedule Meeting Modal */}
-      {isAddingMeeting && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl w-full max-w-md p-6 animate-in zoom-in-95">
-                  <h3 className="text-xl font-bold mb-4">Schedule Meeting</h3>
-                  <div className="space-y-4">
-                      <input className={inputStyle} placeholder="Meeting Title" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
-                      <select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}>
-                          <option value="Zoom">Zoom</option>
-                          <option value="Google Meet">Google Meet</option>
-                          <option value="Microsoft Teams">Microsoft Teams</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-4">
-                          <input type="date" className={inputStyle} value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
-                          <input type="time" className={inputStyle} value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
-                      </div>
-                      <input className={inputStyle} placeholder="Attendee Emails (comma separated)" value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
-                      <div className="flex gap-2 justify-end mt-4">
-                          <button onClick={() => setIsAddingMeeting(false)} className="px-4 py-2 text-slate-500">Cancel</button>
-                          <Button onClick={handleScheduleMeeting}>Schedule</Button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Add User Modal */}
-      {isAddingUser && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl w-full max-w-md p-6 animate-in zoom-in-95">
-                  <h3 className="text-xl font-bold mb-4">Create New User</h3>
-                  <div className="space-y-4">
-                      <input className={inputStyle} placeholder="Full Name" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
-                      <input className={inputStyle} placeholder="Email" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
-                      <input className={inputStyle} type="password" placeholder="Password" value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
-                      <select className={inputStyle} value={newUserData.role} onChange={e => setNewUserData({...newUserData, role: e.target.value})}>
-                          <option value="customer">Customer</option>
-                          <option value="admin">Admin</option>
-                      </select>
-                      <div className="flex gap-2 justify-end mt-4">
-                          <button onClick={() => setIsAddingUser(false)} className="px-4 py-2 text-slate-500">Cancel</button>
-                          <Button onClick={handleCreateUser}>Create Account</Button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Add Technician Modal */}
-      {isAddingTech && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl w-full max-w-md p-6 animate-in zoom-in-95">
-                  <h3 className="text-xl font-bold mb-4">Register Technician</h3>
-                  <div className="space-y-4">
-                      <input className={inputStyle} placeholder="Full Name" value={newTechData.name} onChange={e => setNewTechData({...newTechData, name: e.target.value})} />
-                      <input className={inputStyle} placeholder="Email" value={newTechData.email} onChange={e => setNewTechData({...newTechData, email: e.target.value})} />
-                      <input className={inputStyle} placeholder="Phone" value={newTechData.phone} onChange={e => setNewTechData({...newTechData, phone: e.target.value})} />
-                      <select className={inputStyle} value={newTechData.role} onChange={e => setNewTechData({...newTechData, role: e.target.value})}>
-                          {TECH_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <select className={inputStyle} value={newTechData.department} onChange={e => setNewTechData({...newTechData, department: e.target.value})}>
-                          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                      <div className="flex gap-2 justify-end mt-4">
-                          <button onClick={() => setIsAddingTech(false)} className="px-4 py-2 text-slate-500">Cancel</button>
-                          <Button onClick={handleAddTechnician}>Add & Send Invite</Button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* REMOTE MODAL */}
+      {/* MODALS */}
+      
+      {/* 1. REMOTE ACCESS MODAL */}
       {showRemoteModal && (
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
                   <h3 className="text-xl font-bold mb-4 text-slate-900">Remote Session</h3>
                   <input className="w-full border rounded px-3 py-2 mb-4" placeholder="Session ID" value={remoteId} onChange={e => setRemoteId(e.target.value)} />
-                  <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded">AnyDesk</button>
-                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded">TeamViewer</button>
+                  <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded text-xs font-bold hover:bg-red-600 transition">AnyDesk</button>
+                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded text-xs font-bold hover:bg-blue-700 transition">TeamViewer</button>
+                      <button onClick={() => handleLaunchRemote('rustdesk')} className="bg-slate-800 text-white py-2 rounded text-xs font-bold hover:bg-slate-900 transition">RustDesk</button>
                   </div>
-                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-2 text-slate-500 text-sm">Cancel</button>
+                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-4 text-slate-500 text-sm hover:text-slate-800">Cancel</button>
               </div>
           </div>
+      )}
+
+      {/* 2. ADD/EDIT PRODUCT MODAL */}
+      {(isAddingProduct || editingProduct) && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 m-4">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
+              <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className={labelStyle}>Product Name</label>
+                 <input className={inputStyle} value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Category</label>
+                 <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>
+                    {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+               </div>
+               <div>
+                 <label className={labelStyle}>Price (GHS)</label>
+                 <input type="number" className={inputStyle} value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: Number(e.target.value)}) : setNewProduct({...newProduct, price: Number(e.target.value)})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Stock Quantity</label>
+                 <input type="number" className={inputStyle} value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: Number(e.target.value)}) : setNewProduct({...newProduct, stock: Number(e.target.value)})} />
+               </div>
+               <div className="col-span-2">
+                 <label className={labelStyle}>Description</label>
+                 <textarea className={inputStyle} rows={3} value={editingProduct ? editingProduct.description : newProduct.description} onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})}></textarea>
+               </div>
+               <div className="col-span-2">
+                 <label className={labelStyle}>Product Image</label>
+                 <div className="flex gap-4 items-center">
+                    <input type="file" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
+                    {uploading && <RefreshCw size={16} className="animate-spin text-primary-600" />}
+                 </div>
+                 {/* Preview */}
+                 {(editingProduct?.image || newProduct.image) && (
+                    <img src={editingProduct ? editingProduct.image : newProduct.image} alt="Preview" className="h-20 w-auto mt-2 rounded border" />
+                 )}
+               </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+               <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+               <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} disabled={uploading}>
+                 {uploading ? 'Uploading...' : (editingProduct ? 'Save Changes' : 'Create Product')}
+               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. SCHEDULE MEETING MODAL */}
+      {isAddingMeeting && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Schedule Meeting</h3>
+              <button onClick={() => setIsAddingMeeting(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="space-y-4">
+               <div>
+                 <label className={labelStyle}>Meeting Title</label>
+                 <input className={inputStyle} placeholder="e.g., Client Onboarding" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className={labelStyle}>Date</label>
+                   <input type="date" className={inputStyle} value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
+                 </div>
+                 <div>
+                   <label className={labelStyle}>Time</label>
+                   <input type="time" className={inputStyle} value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
+                 </div>
+               </div>
+               <div>
+                 <label className={labelStyle}>Platform</label>
+                 <select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}>
+                    <option value="Zoom">Zoom</option>
+                    <option value="Google Meet">Google Meet</option>
+                    <option value="Microsoft Teams">Microsoft Teams</option>
+                 </select>
+               </div>
+               <div>
+                 <label className={labelStyle}>Attendees (Emails comma separated)</label>
+                 <input className={inputStyle} placeholder="client@email.com, tech@buzzitech.com" value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
+               </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+               <button onClick={() => setIsAddingMeeting(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+               <Button onClick={handleScheduleMeeting}>Schedule</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. ADD USER MODAL */}
+      {isAddingUser && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Add New Customer</h3>
+              <button onClick={() => setIsAddingUser(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="space-y-4">
+               <div>
+                 <label className={labelStyle}>Full Name</label>
+                 <input className={inputStyle} placeholder="John Doe" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Email Address</label>
+                 <input type="email" className={inputStyle} placeholder="john@example.com" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Temporary Password</label>
+                 <input type="password" className={inputStyle} value={newUserData.password} onChange={e => setNewUserData({...newUserData, password: e.target.value})} />
+               </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+               <button onClick={() => setIsAddingUser(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+               <Button onClick={handleCreateUser}>Create Account</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. ADD TECHNICIAN MODAL */}
+      {isAddingTech && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Add Technician</h3>
+              <button onClick={() => setIsAddingTech(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="col-span-2">
+                 <label className={labelStyle}>Full Name</label>
+                 <input className={inputStyle} value={newTechData.name} onChange={e => setNewTechData({...newTechData, name: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Email</label>
+                 <input type="email" className={inputStyle} value={newTechData.email} onChange={e => setNewTechData({...newTechData, email: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Phone</label>
+                 <input className={inputStyle} value={newTechData.phone} onChange={e => setNewTechData({...newTechData, phone: e.target.value})} />
+               </div>
+               <div>
+                 <label className={labelStyle}>Role</label>
+                 <select className={inputStyle} value={newTechData.role} onChange={e => setNewTechData({...newTechData, role: e.target.value})}>
+                    {TECH_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                 </select>
+               </div>
+               <div>
+                 <label className={labelStyle}>Department</label>
+                 <select className={inputStyle} value={newTechData.department} onChange={e => setNewTechData({...newTechData, department: e.target.value})}>
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                 </select>
+               </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+               <button onClick={() => setIsAddingTech(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+               <Button onClick={handleAddTechnician}>Add Technician</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. CREATE TICKET MODAL */}
+      {isAddingBooking && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Create Support Ticket</h3>
+              <button onClick={() => setIsAddingBooking(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="space-y-4">
+                <div>
+                    <label className={labelStyle}>Select User (Optional)</label>
+                    <select className={inputStyle} onChange={(e) => handleUserSelectForTicket(e.target.value)}>
+                        <option value="new">-- New / Unregistered Client --</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className={labelStyle}>Client Name</label>
+                    <input className={inputStyle} value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} placeholder="Full Name" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className={labelStyle}>Email</label>
+                        <input className={inputStyle} value={newBookingData.email} onChange={e => setNewBookingData({...newBookingData, email: e.target.value})} placeholder="Email" />
+                    </div>
+                    <div>
+                        <label className={labelStyle}>Phone</label>
+                        <input className={inputStyle} value={newBookingData.phone} onChange={e => setNewBookingData({...newBookingData, phone: e.target.value})} placeholder="Phone" />
+                    </div>
+                </div>
+                <div>
+                    <label className={labelStyle}>Issue / Service Type</label>
+                    <input className={inputStyle} value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})} placeholder="e.g. CCTV Maintenance" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className={labelStyle}>Date</label>
+                        <input type="date" className={inputStyle} value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className={labelStyle}>Time</label>
+                        <input type="time" className={inputStyle} value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
+                    </div>
+                </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+               <button onClick={() => setIsAddingBooking(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+               <Button onClick={handleCreateBooking} disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create Ticket'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. ADMIN QUOTE GENERATOR MODAL */}
+      {isCreatingQuote && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 m-4">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Generate Quote / Invoice</h3>
+              <button onClick={() => setIsCreatingQuote(false)}><X className="text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               {/* Client Info */}
+               <div className="space-y-4">
+                   <h4 className="font-bold text-gray-700 border-b pb-2">Client Details</h4>
+                   <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
+                   <input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
+                   <input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
+                   <select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}>
+                       <option value="General Quote">General Quote</option>
+                       <option value="CCTV Installation">CCTV Installation</option>
+                       <option value="Networking">Networking</option>
+                       <option value="Starlink">Starlink</option>
+                   </select>
+               </div>
+
+               {/* Line Item Adder */}
+               <div className="space-y-4">
+                   <h4 className="font-bold text-gray-700 border-b pb-2">Add Items</h4>
+                   <div className="flex gap-2">
+                       <input className={`${inputStyle} flex-grow`} placeholder="Item Name" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
+                       <input type="number" className={`${inputStyle} w-24`} placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
+                   </div>
+                   <div className="flex gap-2">
+                       <input type="number" className={`${inputStyle} w-24`} placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
+                       <select className={`${inputStyle} flex-grow`} value={newQuoteItem.category} onChange={e => setNewQuoteItem({...newQuoteItem, category: e.target.value})}>
+                           <option value="Hardware">Hardware</option>
+                           <option value="Service">Service/Labor</option>
+                       </select>
+                       <button onClick={handleAddQuoteItem} className="bg-primary-600 text-white px-4 rounded-lg hover:bg-primary-700"><Plus /></button>
+                   </div>
+               </div>
+            </div>
+
+            {/* Items List */}
+            <div className="mt-6 bg-slate-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="text-left text-slate-500">
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {newQuoteData.items?.map((item, idx) => (
+                            <tr key={idx} className="border-b border-slate-200 last:border-0">
+                                <td className="py-2">{item.name}</td>
+                                <td>{item.quantity}</td>
+                                <td>{item.price}</td>
+                                <td>{(item.price * item.quantity).toLocaleString()}</td>
+                            </tr>
+                        ))}
+                        {(!newQuoteData.items || newQuoteData.items.length === 0) && <tr><td colSpan={4} className="text-center py-4 text-slate-400">No items added.</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+                <div className="text-xl font-bold text-slate-900">Total: GHS {newQuoteData.grandTotal?.toLocaleString()}</div>
+                <div className="flex gap-3">
+                    <button onClick={() => setIsCreatingQuote(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-slate-600">Cancel</button>
+                    <Button onClick={handleGenerateAdminQuote}>Generate & Download</Button>
+                </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

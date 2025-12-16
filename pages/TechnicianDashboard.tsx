@@ -56,7 +56,7 @@ const TechnicianDashboard: React.FC = () => {
     navigate('/login');
   };
 
-  const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer') => {
+  const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer' | 'rustdesk') => {
       if (!remoteId.trim()) {
           alert("Please enter the client's Session ID");
           return;
@@ -71,6 +71,9 @@ const TechnicianDashboard: React.FC = () => {
       if (tool === 'anydesk') {
           protocolUrl = `anydesk:${cleanId}`;
           fallbackUrl = 'https://anydesk.com/en/downloads';
+      } else if (tool === 'rustdesk') {
+          protocolUrl = `rustdesk://${cleanId}`;
+          fallbackUrl = 'https://rustdesk.com/download';
       } else {
           // TeamViewer protocol (standard is teamviewer10 or 8 usually)
           protocolUrl = `teamviewer8://${cleanId}`; 
@@ -289,9 +292,10 @@ const TechnicianDashboard: React.FC = () => {
                         value={remoteId}
                         onChange={e => setRemoteId(e.target.value)}
                     />
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                        <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-600 text-white py-2 rounded hover:bg-red-700 font-bold transition">AnyDesk</button>
-                        <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-bold transition">TeamViewer</button>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                        <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-600 text-white py-2 rounded hover:bg-red-700 font-bold transition text-xs">AnyDesk</button>
+                        <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-bold transition text-xs">TeamViewer</button>
+                        <button onClick={() => handleLaunchRemote('rustdesk')} className="bg-slate-800 text-white py-2 rounded hover:bg-slate-900 font-bold transition text-xs">RustDesk</button>
                     </div>
                     <button onClick={() => setShowRemoteModal(false)} className="w-full text-slate-500 hover:text-slate-800 text-sm">Cancel</button>
                 </div>
