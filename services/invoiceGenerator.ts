@@ -2,7 +2,31 @@ import { jsPDF } from "jspdf";
 import { QuoteFormData } from "../types";
 import { COMPANY_INFO } from "../constants";
 
-export const generateInvoice = (data: QuoteFormData) => {
+// Helper to load image from URL or Data URI
+const loadImage = (url: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    // If it's already a Data URI, return it
+    if (url.startsWith('data:')) {
+        resolve(url);
+        return;
+    }
+    
+    // Otherwise fetch the URL and convert to Blob -> Data URL
+    fetch(url)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      })
+      .catch((err) => {
+        console.warn("Failed to load invoice logo", err);
+        resolve(null);
+      });
+  });
+};
+
+export const generateInvoice = async (data: QuoteFormData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -41,11 +65,14 @@ export const generateInvoice = (data: QuoteFormData) => {
       const settings = localStorage.getItem('buzzitech_settings');
       if (settings) {
           const parsed = JSON.parse(settings);
-          if (parsed.logoUrl && parsed.logoUrl.startsWith('data:image')) {
-              // Add Custom Logo Image if it is a Data URI (Base64)
-              // We assume standard aspect ratio, restrict height to ~15
-              doc.addImage(parsed.logoUrl, 'PNG', margin, 15, 30, 15, undefined, 'FAST');
-              logoDrawn = true;
+          if (parsed.logoUrl) {
+              const imgData = await loadImage(parsed.logoUrl);
+              if (imgData) {
+                  // Determine format from data string if possible, else default to PNG
+                  const format = imgData.includes('image/jpeg') ? 'JPEG' : 'PNG';
+                  doc.addImage(imgData, format, margin, 15, 30, 15, undefined, 'FAST');
+                  logoDrawn = true;
+              }
           }
       }
   } catch (e) {
@@ -228,10 +255,10 @@ export const generateInvoice = (data: QuoteFormData) => {
   doc.text(`GHS ${data.grandTotal.toLocaleString()}`, totalValueX, totalY, { align: "right" });
 
   // --- 6. FOOTER & TERMS ---
-  const footerY = pageHeight - 35;
+  const footerY = pageHeight - 40; // Increased height for footer content
   
   doc.setFillColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
-  doc.rect(0, footerY - 5, pageWidth, 40, 'F');
+  doc.rect(0, footerY - 5, pageWidth, 45, 'F'); // Extended rect
 
   doc.setFontSize(8);
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
@@ -244,13 +271,18 @@ export const generateInvoice = (data: QuoteFormData) => {
   doc.text("2. A 70% mobilization fee is required to commence work.", margin, footerY + 15);
   doc.text("3. Final pricing subject to site survey and hardware cost fluctuations.", margin, footerY + 20);
 
+  // Website & Branding
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(colors.cyan[0], colors.cyan[1], colors.cyan[2]);
+  doc.text("www.buzzitechsolutions.com", margin, footerY + 30);
+
   // Bottom Branding Line
   doc.setFillColor(colors.cyan[0], colors.cyan[1], colors.cyan[2]);
   doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
   
   doc.setFontSize(9);
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  doc.text("Thank you for choosing Buzzitech!", pageWidth - margin, footerY + 25, { align: "right" });
+  doc.text("Thank you for choosing Buzzitech!", pageWidth - margin, footerY + 30, { align: "right" });
 
   doc.save(`Buzzitech_Quote_${invoiceNum}.pdf`);
 };

@@ -119,7 +119,8 @@ const Quote: React.FC = () => {
       serviceType: contactInfo.serviceType || "General Quote",
       items: cart,
       grandTotal: grandTotal,
-      description: mergedDescription || "Generated via Online Quote Builder"
+      description: mergedDescription || "Generated via Online Quote Builder",
+      timeline: contactInfo.timeline
     };
 
     try {
@@ -127,7 +128,7 @@ const Quote: React.FC = () => {
       const response = await api.requestQuotation(fullQuoteData);
       
       // 2. Generate PDF only if API didn't hard fail
-      generateInvoice(fullQuoteData);
+      await generateInvoice(fullQuoteData);
       
       setServerMessage(JSON.stringify(response.data) || response.message);
       setSuccess(true);
@@ -210,15 +211,16 @@ const Quote: React.FC = () => {
            )}
 
            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-             <Button onClick={() => {
+             <Button onClick={async () => {
                 const fullQuoteData: QuoteFormData = {
                   ...contactInfo,
                   serviceType: contactInfo.serviceType || "General Quote",
                   items: cart,
                   grandTotal: grandTotal,
-                  description: contactInfo.description || ""
+                  description: contactInfo.description || "",
+                  timeline: contactInfo.timeline
                 };
-                generateInvoice(fullQuoteData);
+                await generateInvoice(fullQuoteData);
              }} variant="outline">
                <Download size={18} className="mr-2" /> Download PDF Again
              </Button>
