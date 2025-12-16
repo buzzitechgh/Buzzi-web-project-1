@@ -136,6 +136,15 @@ const updateSystemSettings = async (req, res) => {
         if (encPass) settings.email.smtp.pass = encPass;
     }
 
+    // 3.5 SMS
+    if (updates.sms) {
+        settings.sms.provider = updates.sms.provider;
+        settings.sms.senderId = updates.sms.senderId;
+        
+        const encApiKey = updateSecure(null, updates.sms.apiKey);
+        if (encApiKey) settings.sms.apiKey = encApiKey;
+    }
+
     // 4. n8n
     if (updates.n8n) {
         settings.n8n.enabled = updates.n8n.enabled;

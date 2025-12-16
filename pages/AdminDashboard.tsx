@@ -113,6 +113,9 @@ const AdminDashboard: React.FC = () => {
       smsProvider: 'AfricaTalking',
       smsApiKey: '',
       smsSenderId: '',
+      paymentGateway: 'paystack',
+      paystackPublicKey: '',
+      paystackSecretKey: '',
       smtpHost: 'smtp.gmail.com',
       smtpUser: '',
       smtpPass: '',
@@ -1039,6 +1042,7 @@ const AdminDashboard: React.FC = () => {
             {/* SETTINGS TAB */}
             {activeTab === 'settings' && (
               <div className="max-w-4xl mx-auto space-y-6">
+                  {/* General Configuration */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Settings size={20} /> General Configuration</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1059,12 +1063,68 @@ const AdminDashboard: React.FC = () => {
                       </div>
                   </div>
 
+                  {/* Payment Gateway */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Webhook size={20} /> Automation (n8n / Webhooks)</h3>
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><CreditCard size={20} /> Payment Gateway</h3>
                       <div className="space-y-4">
                           <div>
-                              <label className={labelStyle}>Main Webhook URL</label>
+                              <label className={labelStyle}>Provider</label>
+                              <select className={inputStyle} value={settings.paymentGateway} onChange={e => setSettings({...settings, paymentGateway: e.target.value})}>
+                                  <option value="paystack">Paystack</option>
+                                  <option value="stripe">Stripe</option>
+                                  <option value="momo">Mobile Money (Manual)</option>
+                              </select>
+                          </div>
+                          {settings.paymentGateway === 'paystack' && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                      <label className={labelStyle}>Public Key</label>
+                                      <input className={inputStyle} value={settings.paystackPublicKey} onChange={e => setSettings({...settings, paystackPublicKey: e.target.value})} placeholder="pk_test_..." />
+                                  </div>
+                                  <div>
+                                      <label className={labelStyle}>Secret Key</label>
+                                      <input type="password" className={inputStyle} value={settings.paystackSecretKey} onChange={e => setSettings({...settings, paystackSecretKey: e.target.value})} placeholder="sk_test_..." />
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* SMS Notifications */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Smartphone size={20} /> SMS Notifications</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className={labelStyle}>Provider</label>
+                              <select className={inputStyle} value={settings.smsProvider} onChange={e => setSettings({...settings, smsProvider: e.target.value})}>
+                                  <option value="AfricaTalking">Africa's Talking</option>
+                                  <option value="Twilio">Twilio</option>
+                                  <option value="Arkesel">Arkesel</option>
+                                  <option value="console_log">Console Log (Dev)</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className={labelStyle}>Sender ID</label>
+                              <input className={inputStyle} value={settings.smsSenderId} onChange={e => setSettings({...settings, smsSenderId: e.target.value})} placeholder="BUZZITECH" />
+                          </div>
+                          <div className="col-span-2">
+                              <label className={labelStyle}>API Key</label>
+                              <input type="password" className={inputStyle} value={settings.smsApiKey} onChange={e => setSettings({...settings, smsApiKey: e.target.value})} />
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Automation & Integrations */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Webhook size={20} /> Automation & Integrations</h3>
+                      <div className="space-y-4">
+                          <div>
+                              <label className={labelStyle}>Main Webhook URL (n8n)</label>
                               <input className={inputStyle} value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://your-n8n-instance.com/webhook/..." />
+                          </div>
+                          <div>
+                              <label className={labelStyle}>Formspree Endpoint</label>
+                              <input className={inputStyle} value={settings.formspreeUrl} onChange={e => setSettings({...settings, formspreeUrl: e.target.value})} placeholder="https://formspree.io/f/..." />
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
@@ -1079,6 +1139,7 @@ const AdminDashboard: React.FC = () => {
                       </div>
                   </div>
 
+                  {/* Email (SMTP) */}
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Mail size={20} /> Email (SMTP)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
