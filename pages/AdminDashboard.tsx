@@ -669,6 +669,24 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
+  const handleScheduleMeeting = async () => {
+      try {
+          const result = await api.scheduleMeeting({
+              title: newMeetingData.title,
+              platform: newMeetingData.platform as any,
+              date: newMeetingData.date,
+              time: newMeetingData.time,
+              attendees: newMeetingData.attendees.split(',').map(e => e.trim())
+          });
+          setMeetings(prev => [...prev, result.meeting]);
+          setIsAddingMeeting(false);
+          setNewMeetingData({ title: '', platform: 'Zoom', date: '', time: '', attendees: '' });
+          alert("Meeting Scheduled & Link Generated");
+      } catch (e) {
+          alert("Failed to schedule meeting");
+      }
+  };
+
   // --- Components for Sections ---
   const OverviewCard = ({ title, value, icon: Icon, color }: any) => (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
@@ -1129,23 +1147,49 @@ const AdminDashboard: React.FC = () => {
             )}
 
             {activeTab === 'meetings' && (
-               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="flex justify-between mb-4">
-                     <h3 className="font-bold text-slate-800">Scheduled Meetings</h3>
-                     <Button size="sm" onClick={() => setIsAddingMeeting(true)}>Schedule Meeting</Button>
-                  </div>
-                  <div className="space-y-3">
-                     {meetings.map(meeting => (
-                        <div key={meeting.id} className="flex justify-between items-center border p-3 rounded-lg">
-                           <div><p className="font-bold">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.date} at {meeting.time} ({meeting.platform})</p></div>
-                           <div className="flex gap-2">
-                              <a href={meeting.link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline">Join Link</a>
-                              <button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button>
-                           </div>
-                        </div>
-                     ))}
-                     {meetings.length === 0 && <p className="text-slate-400 text-sm">No meetings scheduled.</p>}
-                  </div>
+               <div className="space-y-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex justify-between mb-4">
+                         <h3 className="font-bold text-slate-800">Scheduled Meetings</h3>
+                         <Button size="sm" onClick={() => setIsAddingMeeting(true)}>Schedule Meeting</Button>
+                      </div>
+                      <div className="space-y-3">
+                         {meetings.map(meeting => (
+                            <div key={meeting.id} className="flex justify-between items-center border p-3 rounded-lg">
+                               <div><p className="font-bold">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.date} at {meeting.time} ({meeting.platform})</p></div>
+                               <div className="flex gap-2">
+                                  <a href={meeting.link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline">Join Link</a>
+                                  <button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button>
+                               </div>
+                            </div>
+                         ))}
+                         {meetings.length === 0 && <p className="text-slate-400 text-sm">No meetings scheduled.</p>}
+                      </div>
+                   </div>
+
+                   {/* Remote Tools Section inside Module */}
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex justify-between mb-4">
+                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                             <Monitor size={18} className="text-primary-600" /> Remote Support Tools
+                         </h3>
+                         <Button size="sm" variant="outline" onClick={() => setShowRemoteModal(true)}>Launch Session</Button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
+                              <span className="font-medium text-sm">AnyDesk</span>
+                              <button onClick={() => handleLaunchRemote('anydesk')} className="text-xs text-blue-600 hover:underline">Open</button>
+                          </div>
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
+                              <span className="font-medium text-sm">TeamViewer</span>
+                              <button onClick={() => handleLaunchRemote('teamviewer')} className="text-xs text-blue-600 hover:underline">Open</button>
+                          </div>
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
+                              <span className="font-medium text-sm">RustDesk</span>
+                              <button onClick={() => handleLaunchRemote('rustdesk')} className="text-xs text-blue-600 hover:underline">Open</button>
+                          </div>
+                      </div>
+                   </div>
                </div>
             )}
 
@@ -1206,11 +1250,12 @@ const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
                   <h3 className="text-xl font-bold mb-4 text-slate-900">Remote Session</h3>
                   <input className="w-full border rounded px-3 py-2 mb-4" placeholder="Session ID" value={remoteId} onChange={e => setRemoteId(e.target.value)} />
-                  <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded">AnyDesk</button>
-                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded">TeamViewer</button>
+                  <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => handleLaunchRemote('anydesk')} className="bg-red-500 text-white py-2 rounded text-xs font-bold">AnyDesk</button>
+                      <button onClick={() => handleLaunchRemote('teamviewer')} className="bg-blue-600 text-white py-2 rounded text-xs font-bold">TeamViewer</button>
+                      <button onClick={() => handleLaunchRemote('rustdesk')} className="bg-slate-800 text-white py-2 rounded text-xs font-bold">RustDesk</button>
                   </div>
-                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-2 text-slate-500 text-sm">Cancel</button>
+                  <button onClick={() => setShowRemoteModal(false)} className="w-full mt-4 text-slate-500 text-sm hover:text-slate-700">Cancel</button>
               </div>
           </div>
       )}
@@ -1299,6 +1344,48 @@ const AdminDashboard: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* ADD MEETING MODAL (RESTORED) */}
+      {isAddingMeeting && (
+         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+               <h3 className="font-bold text-lg mb-4 text-slate-900">Schedule New Meeting</h3>
+               <div className="space-y-3">
+                  <div>
+                      <label className={labelStyle}>Meeting Title</label>
+                      <input className={inputStyle} placeholder="e.g. Project Kickoff" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className={labelStyle}>Date</label>
+                          <input className={inputStyle} type="date" value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className={labelStyle}>Time</label>
+                          <input className={inputStyle} type="time" value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
+                      </div>
+                  </div>
+                  <div>
+                      <label className={labelStyle}>Platform</label>
+                      <select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}>
+                          <option>Zoom</option>
+                          <option>Google Meet</option>
+                          <option>Teams</option>
+                      </select>
+                  </div>
+                  <div>
+                      <label className={labelStyle}>Attendees (Emails)</label>
+                      <input className={inputStyle} placeholder="comma separated..." value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
+                  </div>
+                  
+                  <div className="flex gap-2 mt-4 pt-2">
+                      <Button onClick={handleScheduleMeeting} className="flex-1">Schedule & Send Invites</Button>
+                      <button onClick={() => setIsAddingMeeting(false)} className="px-4 border rounded hover:bg-slate-50 text-slate-600">Cancel</button>
+                  </div>
+               </div>
+            </div>
+         </div>
       )}
 
       {/* TICKET / BOOKING MODAL */}
