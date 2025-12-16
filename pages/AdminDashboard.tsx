@@ -131,8 +131,9 @@ const AdminDashboard: React.FC = () => {
       twoFactorEnforced: false, 
   });
   
-  // Admin Personal 2FA State
+  // Admin Profile & Security State
   const [currentUser2FA, setCurrentUser2FA] = useState(false);
+  const [adminProfile, setAdminProfile] = useState({ email: '', password: '' });
 
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
@@ -233,6 +234,9 @@ const AdminDashboard: React.FC = () => {
               n8nQuoteWebhook: settingsData.n8n?.webhooks?.quoteRequested || prev.n8nQuoteWebhook,
               twoFactorEnforced: settingsData.security?.twoFactorEnforced || false,
           }));
+          
+          if(settingsData.technicianRoles?.length) setTechRoles(settingsData.technicianRoles);
+          if(settingsData.departments?.length) setDepartments(settingsData.departments);
       }
 
       if(imagesData && Object.keys(imagesData).length > 0) {
@@ -240,11 +244,14 @@ const AdminDashboard: React.FC = () => {
           if (imagesData["hero_bg"]) setCurrentImageUrl(imagesData["hero_bg"]);
       }
 
-      // Check current user 2FA status
+      // Check current user 2FA status and Populate Admin Profile
       try {
           const storedUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
           const me = usersData.find((u: any) => u.email === storedUser.email);
-          if (me) setCurrentUser2FA(me.isTwoFactorEnabled);
+          if (me) {
+              setCurrentUser2FA(me.isTwoFactorEnabled);
+              setAdminProfile(prev => ({ ...prev, email: me.email }));
+          }
       } catch (e) {}
 
     } catch (error) {
@@ -266,6 +273,7 @@ const AdminDashboard: React.FC = () => {
   // --- ACTIONS ---
 
   const handleUpdateBookingStatus = async (bookingId: string, newStatus: string) => {
+      // In a real app, you'd call an API. Mocking local update:
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 
@@ -282,6 +290,7 @@ const AdminDashboard: React.FC = () => {
   const handleAssignTechnician = async (bookingId: string, technician: string) => {
      try {
        await api.assignTechnician(bookingId, technician, token);
+       // Update local state to reflect assignment immediately
        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, technician: technician === 'Unassigned' ? null : technician, taskStatus: 'Assigned', status: b.status === 'Pending' ? 'In Progress' : b.status } : b));
        alert(`Technician assigned & notified successfully.`);
      } catch (e) {
@@ -574,10 +583,20 @@ const AdminDashboard: React.FC = () => {
               email: { smtp: { host: settings.smtpHost, user: settings.smtpUser, pass: settings.smtpPass } },
               n8n: { webhooks: { orderCreated: settings.n8nWebhook, ticketCreated: settings.n8nChatWebhook, quoteRequested: settings.n8nQuoteWebhook } },
               formspreeUrl: settings.formspreeUrl,
-              security: { twoFactorEnforced: settings.twoFactorEnforced }
+              security: { twoFactorEnforced: settings.twoFactorEnforced },
+              // Save dynamic roles/departments
+              technicianRoles: techRoles,
+              departments: departments,
+              // Admin Profile Update
+              adminAccount: {
+                  email: adminProfile.email,
+                  password: adminProfile.password
+              }
           };
           await api.saveSettings(payload, token);
-          alert("System settings saved successfully.");
+          
+          setAdminProfile(prev => ({ ...prev, password: '' })); // Clear password field
+          alert("System settings & Admin Profile updated successfully.");
       } catch (e) { alert("Failed to save settings."); }
   };
 
@@ -684,6 +703,55 @@ const AdminDashboard: React.FC = () => {
           alert("Meeting Scheduled & Link Generated");
       } catch (e) {
           alert("Failed to schedule meeting");
+      }
+  };
+
+  // --- CHAT ACTIONS ---
+  const handleInternalChat = async () => {
+      if (!internalMessage.trim() || !chatTarget) return;
+      try {
+          const result = await api.sendInternalMessage('admin', 'Admin', internalMessage, chatTarget.id, 'admin');
+          setInternalChats(prev => [...prev, result.message]);
+          setInternalMessage("");
+          setShowEmojiPicker(false);
+      } catch (e) {
+          alert("Failed to send message");
+      }
+  };
+
+  const handleEmojiClick = (emoji: string) => {
+      setInternalMessage(prev => prev + emoji);
+      setShowEmojiPicker(false);
+  };
+
+  const handleAttachClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setInternalMessage(prev => prev + ` [Attachment: ${file.name}] `);
+          e.target.value = ''; // Reset
+      }
+  };
+
+  // --- NEW HANDLER FOR MESSAGE BUTTON ---
+  const handleStartChatFromTicket = (senderIdentifier: string) => {
+      // Find matching user by name or email
+      const targetUser = users.find(u => 
+          u.name.toLowerCase().includes(senderIdentifier.toLowerCase()) || 
+          u.email.toLowerCase().includes(senderIdentifier.toLowerCase())
+      );
+      
+      if (targetUser) {
+          setChatTarget(targetUser);
+          // Scroll to the chat section
+          setTimeout(() => {
+              document.getElementById('internal-chat-ui')?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+      } else {
+          alert(`User "${senderIdentifier}" not found in active users list.`);
       }
   };
 
@@ -813,6 +881,156 @@ const AdminDashboard: React.FC = () => {
               </>
             )}
 
+            {/* ... Other Tabs (Orders, Bookings, Users, Meetings, Quotes) ... */}
+            
+            {/* MESSAGES TAB - UPDATED WITH CHAT BUTTON */}
+            {activeTab === 'messages' && (
+               <div className="space-y-6">
+                   {/* Support Inbox Section */}
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Mail size={18} /> Support Messages
+                      </h3>
+                      <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                         {messages.map(msg => (
+                            <div key={msg.id} className="border p-4 rounded-lg hover:shadow-sm transition bg-white">
+                               <div className="flex justify-between items-start mb-2">
+                                  <div><h4 className="font-bold">{msg.subject}</h4><p className="text-xs text-slate-500">From: {msg.sender}</p></div>
+                                  <div className="flex items-center gap-2">
+                                      <button 
+                                        onClick={() => handleStartChatFromTicket(msg.sender)}
+                                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" 
+                                        title="Chat with User"
+                                      >
+                                          <MessageSquare size={16} />
+                                      </button>
+                                      <StatusBadge status={msg.status} />
+                                  </div>
+                               </div>
+                               <p className="text-sm text-slate-700 mb-3">{msg.message}</p>
+                               {msg.status === 'Open' && (
+                                  <div className="flex gap-2">
+                                     <input className="flex-1 border rounded px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-primary-200" placeholder="Type reply..." value={replyingMessage === msg.id ? replyText : ''} onChange={e => {setReplyingMessage(msg.id); setReplyText(e.target.value)}} />
+                                     <Button size="sm" onClick={() => handleSendReply(msg.id)}>Reply</Button>
+                                  </div>
+                               )}
+                            </div>
+                         ))}
+                         {messages.length === 0 && <p className="text-slate-400 text-sm">No support messages found.</p>}
+                      </div>
+                   </div>
+
+                   {/* Live Internal Chat Section */}
+                   <div id="internal-chat-ui" className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
+                       {/* Chat User List */}
+                       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                           <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                               <Users size={18} /> Active Users
+                           </h3>
+                           <div className="relative mb-3">
+                               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                               <input className="w-full border rounded-lg pl-9 pr-3 py-2 text-xs bg-slate-50 focus:bg-white transition-colors outline-none" placeholder="Filter users..." />
+                           </div>
+                           <div className="flex-grow overflow-y-auto space-y-2 custom-scrollbar">
+                               {users.filter(u => u.role !== 'admin').map(u => (
+                                   <div 
+                                       key={u.id} 
+                                       onClick={() => setChatTarget(u)}
+                                       className={`p-3 rounded-lg cursor-pointer transition border flex items-center gap-3 ${chatTarget?.id === u.id ? 'bg-primary-50 border-primary-200' : 'hover:bg-slate-50 border-transparent'}`}
+                                   >
+                                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${u.role === 'technician' ? 'bg-green-500' : 'bg-blue-500'}`}>
+                                           {u.name.charAt(0)}
+                                       </div>
+                                       <div className="flex-grow min-w-0">
+                                           <div className="flex justify-between items-center">
+                                               <span className="font-medium text-sm text-slate-800 truncate">{u.name}</span>
+                                           </div>
+                                           <p className="text-xs text-slate-500 truncate">{u.role}</p>
+                                       </div>
+                                       {u.isOnline && <div className="w-2 h-2 bg-green-500 rounded-full" title="Online"></div>}
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+
+                       {/* Chat Window */}
+                       <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                           {chatTarget ? (
+                               <>
+                                   <div className="border-b pb-3 mb-3 flex justify-between items-center">
+                                       <div className="flex items-center gap-3">
+                                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${chatTarget.role === 'technician' ? 'bg-green-600' : 'bg-blue-600'}`}>
+                                               {chatTarget.name.charAt(0)}
+                                           </div>
+                                           <div>
+                                               <h3 className="font-bold text-slate-800">{chatTarget.name}</h3>
+                                               <p className="text-xs text-slate-500">{chatTarget.email} • {chatTarget.role}</p>
+                                           </div>
+                                       </div>
+                                       <span className="text-xs text-green-600 font-bold flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                                           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Live Connection
+                                       </span>
+                                   </div>
+                                   
+                                   <div className="flex-grow overflow-y-auto bg-slate-50 border rounded-lg p-4 mb-3 space-y-3 custom-scrollbar">
+                                       {internalChats
+                                           .filter(c => (c.senderId === 'admin' && c.receiverId === chatTarget.id) || (c.senderId === chatTarget.id && c.receiverId === 'admin'))
+                                           .map(chat => (
+                                               <div key={chat.id} className={`flex ${chat.senderId === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                                                   <div className={`max-w-[70%] p-3 rounded-xl text-sm shadow-sm ${chat.senderId === 'admin' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white border text-slate-800 rounded-bl-none'}`}>
+                                                       <p>{chat.message}</p>
+                                                       <p className={`text-[10px] mt-1 text-right ${chat.senderId === 'admin' ? 'text-primary-100' : 'text-slate-400'}`}>
+                                                           {new Date(chat.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                       </p>
+                                                   </div>
+                                               </div>
+                                           ))
+                                       }
+                                       {internalChats.filter(c => (c.senderId === 'admin' && c.receiverId === chatTarget.id) || (c.senderId === chatTarget.id && c.receiverId === 'admin')).length === 0 && (
+                                           <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                               <MessageSquare size={32} className="mb-2 opacity-20" />
+                                               <p className="text-sm">Start a conversation with {chatTarget.name}</p>
+                                           </div>
+                                       )}
+                                       <div ref={chatEndRef} />
+                                   </div>
+
+                                   <div className="flex gap-2 relative">
+                                       {showEmojiPicker && (
+                                            <div className="absolute bottom-12 left-0 bg-white shadow-xl border border-gray-200 rounded-xl p-3 grid grid-cols-6 gap-2 z-10 w-64">
+                                                {emojis.map(e => <button key={e} onClick={() => handleEmojiClick(e)} className="text-xl hover:bg-slate-100 p-1 rounded transition">{e}</button>)}
+                                            </div>
+                                       )}
+                                       <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition"><Smile size={20} /></button>
+                                       <div className="flex-grow relative">
+                                           <input 
+                                               className="w-full border rounded-full pl-4 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary-500 bg-gray-50 focus:bg-white transition-all" 
+                                               placeholder="Type message..." 
+                                               value={internalMessage}
+                                               onChange={e => setInternalMessage(e.target.value)}
+                                               onKeyDown={e => e.key === 'Enter' && handleInternalChat()}
+                                           />
+                                           <button onClick={handleAttachClick} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><Paperclip size={16} /></button>
+                                           <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                       </div>
+                                       <button onClick={handleInternalChat} className="bg-primary-600 text-white p-2.5 rounded-full hover:bg-primary-700 transition shadow-md flex-shrink-0"><Send size={18} /></button>
+                                   </div>
+                               </>
+                           ) : (
+                               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50/50 rounded-lg border-2 border-dashed border-slate-200">
+                                   <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
+                                      <MessageSquare size={32} className="text-primary-300" />
+                                   </div>
+                                   <h3 className="text-lg font-bold text-slate-600">Internal Chat</h3>
+                                   <p className="text-sm">Select a user from the sidebar to start chatting.</p>
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               </div>
+            )}
+
+            {/* ORDERS TAB */}
             {activeTab === 'orders' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -831,12 +1049,19 @@ const AdminDashboard: React.FC = () => {
                       {orders.map((order) => (
                         <tr key={order.orderId} className="bg-white border-b hover:bg-slate-50">
                           <td className="px-6 py-4 font-medium text-slate-900">{order.orderId}</td>
-                          <td className="px-6 py-4"><div>{order.customer.name}</div><div className="text-xs text-slate-400">{order.customer.email}</div></td>
+                          <td className="px-6 py-4">
+                            <div>{order.customer.name}</div>
+                            <div className="text-xs text-slate-400">{order.customer.email}</div>
+                          </td>
                           <td className="px-6 py-4">GHS {order.total.toLocaleString()}</td>
                           <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
                           <td className="px-6 py-4">{new Date(order.date).toLocaleDateString()}</td>
                           <td className="px-6 py-4">
-                            <select value={order.status} onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-1.5">
+                            <select 
+                              value={order.status} 
+                              onChange={(e) => handleUpdateOrderStatus(order.orderId, e.target.value)}
+                              className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-1.5"
+                            >
                               <option value="Pending">Pending</option>
                               <option value="Processing">Processing</option>
                               <option value="Out for Delivery">Out for Delivery</option>
@@ -852,6 +1077,7 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* BOOKINGS TAB */}
             {activeTab === 'bookings' && (
                <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -898,6 +1124,7 @@ const AdminDashboard: React.FC = () => {
                </div>
             )}
 
+            {/* INVENTORY TAB */}
             {activeTab === 'inventory' && (
               <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -966,12 +1193,46 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* SETTINGS TAB */}
             {activeTab === 'settings' && (
               <div className="max-w-4xl mx-auto space-y-6">
+                  
+                  {/* NEW: ADMIN CREDENTIALS SECTION */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-slate-800"><Key size={20} className="text-primary-600" /> Admin Credentials</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                              <label className={labelStyle}>Login Email</label>
+                              <input 
+                                  className={inputStyle} 
+                                  value={adminProfile.email} 
+                                  onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} 
+                                  placeholder="admin@buzzitech.com"
+                              />
+                              <p className="text-xs text-slate-400 mt-1">This email is used for logging into the admin panel.</p>
+                          </div>
+                          <div>
+                              <label className={labelStyle}>New Password</label>
+                              <input 
+                                  type="password" 
+                                  className={inputStyle} 
+                                  value={adminProfile.password} 
+                                  onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} 
+                                  placeholder="Leave empty to keep current"
+                              />
+                              <p className="text-xs text-slate-400 mt-1">Only enter a value if you want to change your password.</p>
+                          </div>
+                      </div>
+                  </div>
+
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Settings size={20} /> General Configuration</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div><label className={labelStyle}>Admin Email</label><input className={inputStyle} value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} /></div>
+                          <div>
+                              <label className={labelStyle}>Support Email</label>
+                              <input className={inputStyle} value={settings.adminEmail} onChange={e => setSettings({...settings, adminEmail: e.target.value})} />
+                              <p className="text-xs text-slate-400 mt-1">Publicly displayed email for customers.</p>
+                          </div>
                           <div><label className={labelStyle}>Logo URL</label><div className="flex gap-2"><input className={inputStyle} value={settings.logoUrl} onChange={e => setSettings({...settings, logoUrl: e.target.value})} /><label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300"><Upload size={20} className="text-slate-600" /><input type="file" className="hidden" onChange={handleUploadLogo} /></label></div></div>
                       </div>
                   </div>
@@ -1032,6 +1293,10 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* ... Other Tabs (Communication, Chatbot, Users, Meetings, Quotes) ... */}
+            
+            {/* Same as previous file content for other tabs */}
+            {/* communication */}
             {activeTab === 'communication' && (
               <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
                   <h3 className="font-bold text-xl mb-6 flex items-center gap-2"><Megaphone className="text-primary-600" /> Bulk Messaging Center</h3>
@@ -1056,6 +1321,7 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* chatbot */}
             {activeTab === 'chatbot' && (
               <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -1094,6 +1360,7 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* users */}
             {activeTab === 'users' && (
                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 flex justify-between items-center border-b">
@@ -1117,22 +1384,12 @@ const AdminDashboard: React.FC = () => {
                                  <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${user.isApproved && user.status !== 'Suspended' ? 'bg-green-100 text-green-700' : (user.status === 'Suspended' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{user.status === 'Suspended' ? 'Suspended' : (user.isApproved ? 'Active' : 'Pending')}</span></td>
                                  <td className="px-6 py-4 flex items-center gap-2">
                                     {!user.isApproved && <button onClick={() => handleApproveUser(user.id)} className="text-blue-600 text-xs font-bold hover:underline">Approve</button>}
-                                    
-                                    {/* Disable/Enable Action */}
                                     {user.isApproved && (
-                                        <button 
-                                            onClick={() => handleToggleUserStatus(user.id, user.status || 'Active')} 
-                                            className={`text-xs font-bold hover:underline ${user.status === 'Suspended' ? 'text-green-600' : 'text-red-500'}`}
-                                        >
+                                        <button onClick={() => handleToggleUserStatus(user.id, user.status || 'Active')} className={`text-xs font-bold hover:underline ${user.status === 'Suspended' ? 'text-green-600' : 'text-red-500'}`}>
                                             {user.status === 'Suspended' ? 'Enable' : 'Disable'}
                                         </button>
                                     )}
-
-                                    <select
-                                        className="bg-gray-50 border border-gray-200 text-xs rounded p-1"
-                                        value={user.role}
-                                        onChange={(e) => handleAssignRole(user.id, e.target.value)}
-                                    >
+                                    <select className="bg-gray-50 border border-gray-200 text-xs rounded p-1" value={user.role} onChange={(e) => handleAssignRole(user.id, e.target.value)}>
                                         <option value="customer">Customer</option>
                                         <option value="technician">Technician</option>
                                         <option value="admin">Admin</option>
@@ -1146,6 +1403,7 @@ const AdminDashboard: React.FC = () => {
                </div>
             )}
 
+            {/* meetings */}
             {activeTab === 'meetings' && (
                <div className="space-y-6">
                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1157,85 +1415,32 @@ const AdminDashboard: React.FC = () => {
                          {meetings.map(meeting => (
                             <div key={meeting.id} className="flex justify-between items-center border p-3 rounded-lg">
                                <div><p className="font-bold">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.date} at {meeting.time} ({meeting.platform})</p></div>
-                               <div className="flex gap-2">
-                                  <a href={meeting.link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline">Join Link</a>
-                                  <button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button>
-                               </div>
+                               <div className="flex gap-2"><a href={meeting.link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline">Join Link</a><button onClick={() => handleDeleteMeeting(meeting.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button></div>
                             </div>
                          ))}
                          {meetings.length === 0 && <p className="text-slate-400 text-sm">No meetings scheduled.</p>}
                       </div>
                    </div>
-
-                   {/* Remote Tools Section inside Module */}
                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                      <div className="flex justify-between mb-4">
-                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                             <Monitor size={18} className="text-primary-600" /> Remote Support Tools
-                         </h3>
-                         <Button size="sm" variant="outline" onClick={() => setShowRemoteModal(true)}>Launch Session</Button>
-                      </div>
+                      <div className="flex justify-between mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Monitor size={18} className="text-primary-600" /> Remote Support Tools</h3><Button size="sm" variant="outline" onClick={() => setShowRemoteModal(true)}>Launch Session</Button></div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
-                              <span className="font-medium text-sm">AnyDesk</span>
-                              <button onClick={() => handleLaunchRemote('anydesk')} className="text-xs text-blue-600 hover:underline">Open</button>
-                          </div>
-                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
-                              <span className="font-medium text-sm">TeamViewer</span>
-                              <button onClick={() => handleLaunchRemote('teamviewer')} className="text-xs text-blue-600 hover:underline">Open</button>
-                          </div>
-                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
-                              <span className="font-medium text-sm">RustDesk</span>
-                              <button onClick={() => handleLaunchRemote('rustdesk')} className="text-xs text-blue-600 hover:underline">Open</button>
-                          </div>
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between"><span className="font-medium text-sm">AnyDesk</span><button onClick={() => handleLaunchRemote('anydesk')} className="text-xs text-blue-600 hover:underline">Open</button></div>
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between"><span className="font-medium text-sm">TeamViewer</span><button onClick={() => handleLaunchRemote('teamviewer')} className="text-xs text-blue-600 hover:underline">Open</button></div>
+                          <div className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between"><span className="font-medium text-sm">RustDesk</span><button onClick={() => handleLaunchRemote('rustdesk')} className="text-xs text-blue-600 hover:underline">Open</button></div>
                       </div>
                    </div>
                </div>
             )}
 
+            {/* quotes */}
             {activeTab === 'quotes' && (
                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="flex justify-between mb-4">
-                     <h3 className="font-bold text-slate-800">Generated Quotes</h3>
-                     <Button size="sm" onClick={() => setIsCreatingQuote(true)}>Create Quote</Button>
-                  </div>
+                  <div className="flex justify-between mb-4"><h3 className="font-bold text-slate-800">Generated Quotes</h3><Button size="sm" onClick={() => setIsCreatingQuote(true)}>Create Quote</Button></div>
                   <div className="overflow-x-auto">
                      <table className="w-full text-sm text-left text-slate-500">
                         <thead className="bg-slate-50 text-xs text-slate-700 uppercase"><tr><th className="px-6 py-3">Client</th><th className="px-6 py-3">Service</th><th className="px-6 py-3">Total</th><th className="px-6 py-3">Date</th></tr></thead>
-                        <tbody>
-                           {quotes.map((quote, idx) => (
-                              <tr key={idx} className="border-b">
-                                 <td className="px-6 py-4 font-bold">{quote.name}</td>
-                                 <td className="px-6 py-4">{quote.serviceType}</td>
-                                 <td className="px-6 py-4">GHS {quote.grandTotal.toLocaleString()}</td>
-                                 <td className="px-6 py-4">{new Date(quote.date).toLocaleDateString()}</td>
-                              </tr>
-                           ))}
-                        </tbody>
+                        <tbody>{quotes.map((quote, idx) => (<tr key={idx} className="border-b"><td className="px-6 py-4 font-bold">{quote.name}</td><td className="px-6 py-4">{quote.serviceType}</td><td className="px-6 py-4">GHS {quote.grandTotal.toLocaleString()}</td><td className="px-6 py-4">{new Date(quote.date).toLocaleDateString()}</td></tr>))}</tbody>
                      </table>
-                  </div>
-               </div>
-            )}
-
-            {activeTab === 'messages' && (
-               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="font-bold text-slate-800 mb-4">Support Messages</h3>
-                  <div className="space-y-4">
-                     {messages.map(msg => (
-                        <div key={msg.id} className="border p-4 rounded-lg hover:shadow-sm transition">
-                           <div className="flex justify-between items-start mb-2">
-                              <div><h4 className="font-bold">{msg.subject}</h4><p className="text-xs text-slate-500">From: {msg.sender}</p></div>
-                              <StatusBadge status={msg.status} />
-                           </div>
-                           <p className="text-sm text-slate-700 mb-3">{msg.message}</p>
-                           {msg.status === 'Open' && (
-                              <div className="flex gap-2">
-                                 <input className="flex-1 border rounded px-3 py-1 text-sm" placeholder="Type reply..." value={replyingMessage === msg.id ? replyText : ''} onChange={e => {setReplyingMessage(msg.id); setReplyText(e.target.value)}} />
-                                 <Button size="sm" onClick={() => handleSendReply(msg.id)}>Reply</Button>
-                              </div>
-                           )}
-                        </div>
-                     ))}
                   </div>
                </div>
             )}
@@ -1244,7 +1449,7 @@ const AdminDashboard: React.FC = () => {
         )}
       </main>
 
-      {/* REMOTE MODAL */}
+      {/* MODALS (Including new Manage Roles Modal) */}
       {showRemoteModal && (
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
@@ -1260,12 +1465,10 @@ const AdminDashboard: React.FC = () => {
           </div>
       )}
 
-      {/* MANAGE ROLES MODAL */}
       {isManagingRoles && (
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl p-6 w-full max-w-md">
                   <h3 className="font-bold text-lg mb-4 text-slate-900">Manage Definitions</h3>
-                  
                   <div className="space-y-4 mb-6">
                       <div>
                           <label className={labelStyle}>Technician Roles</label>
@@ -1277,7 +1480,6 @@ const AdminDashboard: React.FC = () => {
                               <button onClick={handleAddRole} className="bg-primary-600 text-white px-3 rounded-lg"><Plus size={18} /></button>
                           </div>
                       </div>
-
                       <div>
                           <label className={labelStyle}>Departments</label>
                           <div className="flex flex-wrap gap-2 mb-2 p-2 bg-slate-50 rounded border border-gray-100 max-h-24 overflow-y-auto">
@@ -1289,7 +1491,6 @@ const AdminDashboard: React.FC = () => {
                           </div>
                       </div>
                   </div>
-
                   <div className="flex justify-end">
                       <Button onClick={() => setIsManagingRoles(false)}>Close Manager</Button>
                   </div>
@@ -1346,43 +1547,17 @@ const AdminDashboard: React.FC = () => {
           </div>
       )}
 
-      {/* ADD MEETING MODAL (RESTORED) */}
+      {/* ADD MEETING MODAL */}
       {isAddingMeeting && (
          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
                <h3 className="font-bold text-lg mb-4 text-slate-900">Schedule New Meeting</h3>
                <div className="space-y-3">
-                  <div>
-                      <label className={labelStyle}>Meeting Title</label>
-                      <input className={inputStyle} placeholder="e.g. Project Kickoff" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                      <div>
-                          <label className={labelStyle}>Date</label>
-                          <input className={inputStyle} type="date" value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className={labelStyle}>Time</label>
-                          <input className={inputStyle} type="time" value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} />
-                      </div>
-                  </div>
-                  <div>
-                      <label className={labelStyle}>Platform</label>
-                      <select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}>
-                          <option>Zoom</option>
-                          <option>Google Meet</option>
-                          <option>Teams</option>
-                      </select>
-                  </div>
-                  <div>
-                      <label className={labelStyle}>Attendees (Emails)</label>
-                      <input className={inputStyle} placeholder="comma separated..." value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} />
-                  </div>
-                  
-                  <div className="flex gap-2 mt-4 pt-2">
-                      <Button onClick={handleScheduleMeeting} className="flex-1">Schedule & Send Invites</Button>
-                      <button onClick={() => setIsAddingMeeting(false)} className="px-4 border rounded hover:bg-slate-50 text-slate-600">Cancel</button>
-                  </div>
+                  <div><label className={labelStyle}>Meeting Title</label><input className={inputStyle} placeholder="e.g. Project Kickoff" value={newMeetingData.title} onChange={e => setNewMeetingData({...newMeetingData, title: e.target.value})} /></div>
+                  <div className="grid grid-cols-2 gap-3"><div><label className={labelStyle}>Date</label><input className={inputStyle} type="date" value={newMeetingData.date} onChange={e => setNewMeetingData({...newMeetingData, date: e.target.value})} /></div><div><label className={labelStyle}>Time</label><input className={inputStyle} type="time" value={newMeetingData.time} onChange={e => setNewMeetingData({...newMeetingData, time: e.target.value})} /></div></div>
+                  <div><label className={labelStyle}>Platform</label><select className={inputStyle} value={newMeetingData.platform} onChange={e => setNewMeetingData({...newMeetingData, platform: e.target.value})}><option>Zoom</option><option>Google Meet</option><option>Teams</option></select></div>
+                  <div><label className={labelStyle}>Attendees (Emails)</label><input className={inputStyle} placeholder="comma separated..." value={newMeetingData.attendees} onChange={e => setNewMeetingData({...newMeetingData, attendees: e.target.value})} /></div>
+                  <div className="flex gap-2 mt-4 pt-2"><Button onClick={handleScheduleMeeting} className="flex-1">Schedule & Send Invites</Button><button onClick={() => setIsAddingMeeting(false)} className="px-4 border rounded hover:bg-slate-50 text-slate-600">Cancel</button></div>
                </div>
             </div>
          </div>
@@ -1394,38 +1569,14 @@ const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-xl p-6 w-full max-w-md">
                   <h3 className="font-bold text-lg mb-4">Create New Ticket</h3>
                   <div className="space-y-3">
-                      <div>
-                          <label className={labelStyle}>Select User</label>
-                          <select className={inputStyle} onChange={(e) => handleUserSelectForTicket(e.target.value)}>
-                              <option value="new">-- New User --</option>
-                              {users.filter(u => u.role === 'customer').map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                          </select>
-                      </div>
+                      <div><label className={labelStyle}>Select User</label><select className={inputStyle} onChange={(e) => handleUserSelectForTicket(e.target.value)}><option value="new">-- New User --</option>{users.filter(u => u.role === 'customer').map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}</select></div>
                       <input className={inputStyle} placeholder="Client Name" value={newBookingData.name} onChange={e => setNewBookingData({...newBookingData, name: e.target.value})} />
                       <input className={inputStyle} placeholder="Client Phone" value={newBookingData.phone} onChange={e => setNewBookingData({...newBookingData, phone: e.target.value})} />
                       <input className={inputStyle} placeholder="Client Email" value={newBookingData.email} onChange={e => setNewBookingData({...newBookingData, email: e.target.value})} />
-                      <select className={inputStyle} value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})}>
-                          <option value="">Select Service...</option>
-                          <option value="CCTV Installation">CCTV Installation</option>
-                          <option value="Starlink Setup">Starlink Setup</option>
-                          <option value="Networking">Networking</option>
-                          <option value="Computer Repair">Computer Repair</option>
-                          <option value="Other">Other</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-3">
-                          <input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} />
-                          <input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} />
-                      </div>
-                      <select className={inputStyle} value={newBookingData.technician} onChange={e => setNewBookingData({...newBookingData, technician: e.target.value})}>
-                          <option value="">Assign Technician (Optional)</option>
-                          {technicians.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                      </select>
-                      <div className="flex gap-2 mt-4">
-                          <Button onClick={handleCreateBooking} className="flex-1" disabled={isSubmitting}>
-                              {isSubmitting ? 'Creating...' : 'Create Ticket'}
-                          </Button>
-                          <button onClick={() => setIsAddingBooking(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
-                      </div>
+                      <select className={inputStyle} value={newBookingData.serviceType} onChange={e => setNewBookingData({...newBookingData, serviceType: e.target.value})}><option value="">Select Service...</option><option value="CCTV Installation">CCTV Installation</option><option value="Starlink Setup">Starlink Setup</option><option value="Networking">Networking</option><option value="Computer Repair">Computer Repair</option><option value="Other">Other</option></select>
+                      <div className="grid grid-cols-2 gap-3"><input className={inputStyle} type="date" value={newBookingData.date} onChange={e => setNewBookingData({...newBookingData, date: e.target.value})} /><input className={inputStyle} type="time" value={newBookingData.time} onChange={e => setNewBookingData({...newBookingData, time: e.target.value})} /></div>
+                      <select className={inputStyle} value={newBookingData.technician} onChange={e => setNewBookingData({...newBookingData, technician: e.target.value})}><option value="">Assign Technician (Optional)</option>{technicians.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select>
+                      <div className="flex gap-2 mt-4"><Button onClick={handleCreateBooking} className="flex-1" disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create Ticket'}</Button><button onClick={() => setIsAddingBooking(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button></div>
                   </div>
               </div>
           </div>
@@ -1436,91 +1587,26 @@ const AdminDashboard: React.FC = () => {
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                   <h3 className="font-bold text-lg mb-4">Generate New Quote</h3>
-                  
-                  {/* Client Details */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                      <input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} />
-                      <input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} />
-                      <input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} />
-                      <select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}>
-                          <option value="General">General Quote</option>
-                          {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                  </div>
-
-                  {/* Add Items */}
-                  <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200">
-                      <h4 className="font-bold text-sm text-slate-700 mb-2">Add Line Item</h4>
-                      <div className="grid grid-cols-4 gap-2 mb-2">
-                          <input className={`${inputStyle} col-span-2`} placeholder="Item Description" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} />
-                          <input className={inputStyle} type="number" placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} />
-                          <input className={inputStyle} type="number" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} />
-                      </div>
-                      <button onClick={handleAddQuoteItem} className="w-full bg-slate-200 text-slate-700 py-2 rounded text-sm font-bold hover:bg-slate-300">+ Add Item</button>
-                  </div>
-
-                  {/* Items List */}
-                  <div className="mb-4">
-                      <table className="w-full text-sm">
-                          <thead><tr className="text-left text-slate-500"><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
-                          <tbody>
-                              {(newQuoteData.items || []).map((item, idx) => (
-                                  <tr key={idx} className="border-b">
-                                      <td className="py-2">{item.name}</td>
-                                      <td>{item.quantity}</td>
-                                      <td>{item.price}</td>
-                                      <td>{(item.price * item.quantity).toLocaleString()}</td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                      <div className="text-right font-bold text-lg mt-2">Total: GHS {(newQuoteData.grandTotal || 0).toLocaleString()}</div>
-                  </div>
-
-                  <div className="flex gap-2">
-                      <Button onClick={handleGenerateAdminQuote} className="flex-1">Generate PDF & Save</Button>
-                      <button onClick={() => setIsCreatingQuote(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
-                  </div>
+                  <div className="grid grid-cols-2 gap-4 mb-4"><input className={inputStyle} placeholder="Client Name" value={newQuoteData.name} onChange={e => setNewQuoteData({...newQuoteData, name: e.target.value})} /><input className={inputStyle} placeholder="Client Email" value={newQuoteData.email} onChange={e => setNewQuoteData({...newQuoteData, email: e.target.value})} /><input className={inputStyle} placeholder="Client Phone" value={newQuoteData.phone} onChange={e => setNewQuoteData({...newQuoteData, phone: e.target.value})} /><select className={inputStyle} value={newQuoteData.serviceType} onChange={e => setNewQuoteData({...newQuoteData, serviceType: e.target.value})}><option value="General">General Quote</option>{PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200"><h4 className="font-bold text-sm text-slate-700 mb-2">Add Line Item</h4><div className="grid grid-cols-4 gap-2 mb-2"><input className={`${inputStyle} col-span-2`} placeholder="Item Description" value={newQuoteItem.name} onChange={e => setNewQuoteItem({...newQuoteItem, name: e.target.value})} /><input className={inputStyle} type="number" placeholder="Price" value={newQuoteItem.price} onChange={e => setNewQuoteItem({...newQuoteItem, price: Number(e.target.value)})} /><input className={inputStyle} type="number" placeholder="Qty" value={newQuoteItem.quantity} onChange={e => setNewQuoteItem({...newQuoteItem, quantity: Number(e.target.value)})} /></div><button onClick={handleAddQuoteItem} className="w-full bg-slate-200 text-slate-700 py-2 rounded text-sm font-bold hover:bg-slate-300">+ Add Item</button></div>
+                  <div className="mb-4"><table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>{(newQuoteData.items || []).map((item, idx) => (<tr key={idx} className="border-b"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>{item.price}</td><td>{(item.price * item.quantity).toLocaleString()}</td></tr>))}</tbody></table><div className="text-right font-bold text-lg mt-2">Total: GHS {(newQuoteData.grandTotal || 0).toLocaleString()}</div></div>
+                  <div className="flex gap-2"><Button onClick={handleGenerateAdminQuote} className="flex-1">Generate PDF & Save</Button><button onClick={() => setIsCreatingQuote(false)} className="px-4 border rounded hover:bg-slate-50">Cancel</button></div>
               </div>
           </div>
       )}
 
-      {/* PRODUCT MODAL (ADD & EDIT) */}
+      {/* PRODUCT MODAL */}
       {(isAddingProduct || editingProduct) && (
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                   <h3 className="font-bold text-lg mb-4">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
                   <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                          <input className={inputStyle} placeholder="Product Name" value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} />
-                          <input className={inputStyle} placeholder="Brand" value={editingProduct ? editingProduct.brand : newProduct.brand} onChange={e => editingProduct ? setEditingProduct({...editingProduct, brand: e.target.value}) : setNewProduct({...newProduct, brand: e.target.value})} />
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                          <input className={inputStyle} placeholder="Price" type="number" value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: Number(e.target.value)}) : setNewProduct({...newProduct, price: Number(e.target.value)})} />
-                          <input className={inputStyle} placeholder="Orig Price" type="number" value={editingProduct ? editingProduct.originalPrice : newProduct.originalPrice} onChange={e => editingProduct ? setEditingProduct({...editingProduct, originalPrice: Number(e.target.value)}) : setNewProduct({...newProduct, originalPrice: Number(e.target.value)})} />
-                          <input className={inputStyle} placeholder="Stock" type="number" value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: Number(e.target.value)}) : setNewProduct({...newProduct, stock: Number(e.target.value)})} />
-                      </div>
-                      <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>
-                          {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <div className="grid grid-cols-2 gap-3"><input className={inputStyle} placeholder="Product Name" value={editingProduct ? editingProduct.name : newProduct.name} onChange={e => editingProduct ? setEditingProduct({...editingProduct, name: e.target.value}) : setNewProduct({...newProduct, name: e.target.value})} /><input className={inputStyle} placeholder="Brand" value={editingProduct ? editingProduct.brand : newProduct.brand} onChange={e => editingProduct ? setEditingProduct({...editingProduct, brand: e.target.value}) : setNewProduct({...newProduct, brand: e.target.value})} /></div>
+                      <div className="grid grid-cols-3 gap-3"><input className={inputStyle} placeholder="Price" type="number" value={editingProduct ? editingProduct.price : newProduct.price} onChange={e => editingProduct ? setEditingProduct({...editingProduct, price: Number(e.target.value)}) : setNewProduct({...newProduct, price: Number(e.target.value)})} /><input className={inputStyle} placeholder="Orig Price" type="number" value={editingProduct ? editingProduct.originalPrice : newProduct.originalPrice} onChange={e => editingProduct ? setEditingProduct({...editingProduct, originalPrice: Number(e.target.value)}) : setNewProduct({...newProduct, originalPrice: Number(e.target.value)})} /><input className={inputStyle} placeholder="Stock" type="number" value={editingProduct ? editingProduct.stock : newProduct.stock} onChange={e => editingProduct ? setEditingProduct({...editingProduct, stock: Number(e.target.value)}) : setNewProduct({...newProduct, stock: Number(e.target.value)})} /></div>
+                      <select className={inputStyle} value={editingProduct ? editingProduct.category : newProduct.category} onChange={e => editingProduct ? setEditingProduct({...editingProduct, category: e.target.value}) : setNewProduct({...newProduct, category: e.target.value})}>{PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                       <textarea className={inputStyle} rows={3} placeholder="Description" value={editingProduct ? editingProduct.description : newProduct.description} onChange={e => editingProduct ? setEditingProduct({...editingProduct, description: e.target.value}) : setNewProduct({...newProduct, description: e.target.value})}></textarea>
-                      
-                      {/* Image Upload */}
-                      <div>
-                          <label className={labelStyle}>Product Image</label>
-                          <div className="flex gap-2">
-                              <input className={inputStyle} placeholder="Image URL" value={editingProduct ? editingProduct.image : newProduct.image} onChange={e => editingProduct ? setEditingProduct({...editingProduct, image: e.target.value}) : setNewProduct({...newProduct, image: e.target.value})} />
-                              <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300">
-                                  <Upload size={20} className="text-slate-600" />
-                                  <input type="file" className="hidden" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} />
-                              </label>
-                          </div>
-                      </div>
-
-                      <div className="flex gap-2 mt-4">
-                          <Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} className="flex-1">{editingProduct ? 'Save Changes' : 'Create Product'}</Button>
-                          <button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 border rounded hover:bg-slate-50">Cancel</button>
-                      </div>
+                      <div><label className={labelStyle}>Product Image</label><div className="flex gap-2"><input className={inputStyle} placeholder="Image URL" value={editingProduct ? editingProduct.image : newProduct.image} onChange={e => editingProduct ? setEditingProduct({...editingProduct, image: e.target.value}) : setNewProduct({...newProduct, image: e.target.value})} /><label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2.5 rounded-lg border border-gray-300"><Upload size={20} className="text-slate-600" /><input type="file" className="hidden" onChange={(e) => handleProductImageUpload(e, !!editingProduct)} /></label></div></div>
+                      <div className="flex gap-2 mt-4"><Button onClick={editingProduct ? handleSaveProduct : handleCreateProduct} className="flex-1">{editingProduct ? 'Save Changes' : 'Create Product'}</Button><button onClick={() => { setIsAddingProduct(false); setEditingProduct(null); }} className="px-4 border rounded hover:bg-slate-50">Cancel</button></div>
                   </div>
               </div>
           </div>

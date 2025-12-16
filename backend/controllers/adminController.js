@@ -172,6 +172,33 @@ const updateSystemSettings = async (req, res) => {
         settings.security.technicianApprovalRequired = updates.security.technicianApprovalRequired !== undefined ? updates.security.technicianApprovalRequired : settings.security.technicianApprovalRequired;
     }
 
+    // 6. Dynamic Roles & Departments
+    if (updates.technicianRoles && Array.isArray(updates.technicianRoles)) {
+        settings.technicianRoles = updates.technicianRoles;
+    }
+    if (updates.departments && Array.isArray(updates.departments)) {
+        settings.departments = updates.departments;
+    }
+
+    // 7. Admin Account Update (Security Fix)
+    if (updates.adminAccount) {
+        const { email, password } = updates.adminAccount;
+        // req.user is populated by 'protect' middleware
+        const user = await User.findById(req.user._id);
+        
+        if (user) {
+            // Update email if changed
+            if (email && email !== user.email) {
+                user.email = email;
+            }
+            // Update password if provided (not empty string)
+            if (password && password.trim() !== '') {
+                user.password = password; // Hashing handled by User pre-save hook
+            }
+            await user.save();
+        }
+    }
+
     await settings.save();
     
     res.json({ success: true, message: 'Settings updated successfully' });

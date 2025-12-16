@@ -70,7 +70,12 @@ const systemSettingSchema = mongoose.Schema({
     technicianApprovalRequired: { type: Boolean, default: true },
     sessionTimeout: { type: Number, default: 60 }, // minutes
     allowedOrigins: [{ type: String }] // CORS whitelist
-  }
+  },
+
+  // --- 7. DYNAMIC ROLES & DEPARTMENTS ---
+  technicianRoles: [{ type: String }],
+  departments: [{ type: String }]
+
 }, {
   timestamps: true
 });
@@ -79,7 +84,10 @@ const systemSettingSchema = mongoose.Schema({
 systemSettingSchema.statics.getSettings = async function() {
   const settings = await this.findOne();
   if (settings) return settings;
-  return await this.create({});
+  return await this.create({
+      technicianRoles: ["Network Engineer", "CCTV Specialist", "Software Support", "Field Technician", "System Administrator"],
+      departments: ["Infrastructure", "Security", "IT Support", "Field Ops", "Networking", "General"]
+  });
 };
 
 module.exports = mongoose.model('SystemSetting', systemSettingSchema);
