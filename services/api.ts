@@ -475,16 +475,35 @@ export const api = {
   // --- ADMIN DASHBOARD ---
   
   getAdminStats: async (token: string) => {
-       return {
-         totalVisits: 12450,
-         monthlyVisits: 3200,
-         totalRevenue: 45200,
-         activeOrders: 5,
-         pendingQuotes: 2,
-         openTickets: MOCK_MESSAGES.length,
-         activeCustomers: MOCK_USERS.length,
-         remoteSessions: 0
-       };
+      try {
+        const data = await authFetch('/admin/dashboard');
+        return data;
+      } catch (e) {
+        // Fallback Mock with structure matching AdminDashboard expectations
+        return {
+           overview: {
+             users: MOCK_USERS.length,
+             orders: 120, // Mocked
+             revenue: 45200,
+             technicians: MOCK_TECHNICIANS.length,
+             pendingOrders: 5,
+             lowStock: 2,
+             generatedQuotes: 2,
+             remoteSessions: 0,
+             loggedInUsers: 3
+           },
+           charts: {
+             revenue: [
+                { _id: 1, total: 1200 }, { _id: 2, total: 1900 }, { _id: 3, total: 1500 }, 
+                { _id: 4, total: 2200 }, { _id: 5, total: 1800 }, { _id: 6, total: 2800 },
+                { _id: 7, total: 3500 }, { _id: 8, total: 3100 }, { _id: 9, total: 4200 },
+                { _id: 10, total: 4500 }, { _id: 11, total: 5000 }, { _id: 12, total: 5500 }
+             ]
+           },
+           activity: [],
+           health: { database: 'Mock', emailService: 'Mock', paymentGateway: 'Mock' }
+        };
+      }
   },
 
   getAdminBookings: async (token: string) => MOCK_BOOKINGS,
