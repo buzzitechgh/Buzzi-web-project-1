@@ -29,6 +29,7 @@ const TechnicianDashboard: React.FC = () => {
   // Edit Profile State
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editData, setEditData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [currentPassword, setCurrentPassword] = useState(""); // New field
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -86,6 +87,14 @@ const TechnicianDashboard: React.FC = () => {
           return;
       }
 
+      // Check if sensitive info is changed (Email or Password)
+      const isSensitiveChange = (editData.email !== tech.email) || (editData.password && editData.password.trim() !== "");
+      
+      if (isSensitiveChange && !currentPassword) {
+          alert("Please enter your Current Password to confirm these changes.");
+          return;
+      }
+
       setIsUpdating(true);
       try {
           let imageUrl = tech.verificationImage;
@@ -98,7 +107,8 @@ const TechnicianDashboard: React.FC = () => {
               email: editData.email,
               phone: editData.phone,
               password: editData.password || undefined,
-              verificationImage: imageUrl
+              verificationImage: imageUrl,
+              currentPassword: currentPassword // Send to backend
           });
 
           if(res.success) {
@@ -107,6 +117,7 @@ const TechnicianDashboard: React.FC = () => {
               alert("Profile updated successfully");
               setShowEditProfile(false);
               setEditData(prev => ({...prev, password: '', confirmPassword: ''}));
+              setCurrentPassword(""); // Clear security field
           }
       } catch (e: any) {
           alert(e.message || "Failed to update profile");
@@ -227,7 +238,7 @@ const TechnicianDashboard: React.FC = () => {
               {/* Profile Card */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center relative group">
                  <button 
-                    onClick={() => setShowEditProfile(true)} 
+                    onClick={() => { setShowEditProfile(true); setCurrentPassword(""); }} 
                     className="absolute top-2 right-2 p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-full transition"
                     title="Edit Profile"
                  >
@@ -563,15 +574,27 @@ const TechnicianDashboard: React.FC = () => {
                           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
                           <input className={inputVisibleClass} value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} />
                       </div>
+                      
+                      {/* Security Section - Updated */}
                       <div className="border-t pt-4 mt-2">
                           <p className="text-xs text-slate-400 mb-2 italic">Change Password (Optional)</p>
                           <div className="space-y-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Password</label>
+                                  <input 
+                                    type="password" 
+                                    className={`${inputVisibleClass} ${!currentPassword && (editData.email !== tech.email || editData.password) ? 'border-red-300 bg-red-50' : ''}`}
+                                    placeholder="Required for sensitive changes" 
+                                    value={currentPassword} 
+                                    onChange={e => setCurrentPassword(e.target.value)} 
+                                  />
+                              </div>
                               <div>
                                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
                                   <input type="password" className={inputVisibleClass} placeholder="New password" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} />
                               </div>
                               <div>
-                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm New Password</label>
                                   <input type="password" className={inputVisibleClass} placeholder="Confirm new password" value={editData.confirmPassword} onChange={e => setEditData({...editData, confirmPassword: e.target.value})} />
                               </div>
                           </div>

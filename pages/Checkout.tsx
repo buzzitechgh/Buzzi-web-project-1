@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useCart } from '../context/CartContext';
 import { Trash2, CreditCard, Smartphone, CheckCircle, ShieldCheck, Truck, MapPin, Banknote, Map, ExternalLink, Wrench, Info, Loader2, Search, Navigation, Lock } from 'lucide-react';
@@ -64,6 +65,8 @@ const Checkout: React.FC = () => {
 
   const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'momo' | 'cod'>('paystack');
   const [transactionId, setTransactionId] = useState('');
+
+  const inputClass = "w-full px-4 py-3 border border-slate-400 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white text-slate-900 placeholder-slate-500 font-medium shadow-sm transition-all";
 
   // 1. Calculate Delivery Cost
   const deliveryCost = deliveryMode === 'delivery'
@@ -316,7 +319,7 @@ const Checkout: React.FC = () => {
                             min="1" 
                             value={item.quantity}
                             onChange={(e) => updateQuantity(item.id, parseInt(e.target.value))}
-                            className="w-16 px-2 py-1 border rounded text-center text-sm bg-white text-slate-900"
+                            className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm bg-white text-slate-900 focus:border-primary-500 outline-none font-bold"
                           />
                           <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600">
                             <Trash2 size={18} />
@@ -352,25 +355,25 @@ const Checkout: React.FC = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                      <input type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
+                      <input type="text" className={inputClass}
                         value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder="John Doe" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                      <input type="email" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                      <input type="email" className={inputClass}
                         value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} placeholder="john@example.com" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                      <input type="tel" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900" 
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Phone</label>
+                      <input type="tel" className={inputClass}
                         value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} placeholder="050 000 0000" />
                     </div>
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-bold text-slate-800 mb-1">Region (Affects Delivery & Install Fees)</label>
                       <select 
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900"
+                        className={inputClass}
                         value={customer.region}
                         onChange={(e) => setCustomer({...customer, region: e.target.value})}
                       >
@@ -382,7 +385,7 @@ const Checkout: React.FC = () => {
 
                     {/* Delivery Mode */}
                     <div className="md:col-span-2 space-y-3 mt-2">
-                        <p className="text-sm font-medium text-slate-700">Choose Delivery Method:</p>
+                        <p className="text-sm font-bold text-slate-700">Choose Delivery Method:</p>
                         <div className="flex flex-col sm:flex-row gap-4">
                           <label className={`flex-1 p-4 border rounded-xl cursor-pointer flex items-center gap-4 transition-all ${deliveryMode === 'delivery' ? 'bg-blue-50 border-primary-500 ring-1 ring-primary-500' : 'hover:bg-gray-50 border-gray-200'}`}>
                               <input type="radio" name="deliveryMode" value="delivery" checked={deliveryMode === 'delivery'} onChange={() => setDeliveryMode('delivery')} className="w-5 h-5 text-primary-600" />
@@ -414,7 +417,7 @@ const Checkout: React.FC = () => {
                         {/* 1. Location Search / Auto Grab */}
                         <div>
                            <div className="flex justify-between items-end mb-1">
-                              <label className="block text-sm font-medium text-slate-700">Find Your Location</label>
+                              <label className="block text-sm font-bold text-slate-700">Find Your Location</label>
                               <a 
                                   href="https://www.ghanapostgps.com/map/" 
                                   target="_blank" 
@@ -435,9 +438,9 @@ const Checkout: React.FC = () => {
                                     setIsSearching(true);
                                   }}
                                   placeholder="Search landmark, area, or street..."
-                                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900 shadow-sm transition-all"
+                                  className={`${inputClass} pl-10 pr-12`}
                                 />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 
                                 {/* GPS Auto-Grab Button */}
                                 <button
@@ -452,7 +455,7 @@ const Checkout: React.FC = () => {
 
                               {/* Autocomplete Dropdown */}
                               {showSuggestions && suggestions.length > 0 && (
-                                <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-100 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                                   {suggestions.map((place) => (
                                     <li 
                                       key={place.place_id}
@@ -460,7 +463,7 @@ const Checkout: React.FC = () => {
                                       className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-start gap-3 transition-colors"
                                     >
                                       <MapPin size={16} className="text-primary-500 mt-0.5 flex-shrink-0" />
-                                      <span className="text-sm text-slate-700 leading-snug">{place.display_name}</span>
+                                      <span className="text-sm text-slate-700 leading-snug font-medium">{place.display_name}</span>
                                     </li>
                                   ))}
                                 </ul>
@@ -470,10 +473,10 @@ const Checkout: React.FC = () => {
 
                         {/* 2. Detailed Address Textarea */}
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Detailed Address / Digital Address</label>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Detailed Address / Digital Address</label>
                           <textarea 
                               rows={2} 
-                              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-slate-50 text-slate-900 placeholder:text-slate-400 text-sm" 
+                              className={inputClass}
                               value={customer.address} 
                               onChange={e => setCustomer({...customer, address: e.target.value})}
                               placeholder="e.g., House No. 5, Near Shell Filling Station, GA-123-4567"
@@ -489,7 +492,7 @@ const Checkout: React.FC = () => {
                     )}
                   </div>
 
-                  {/* INSTALLATION SECTION - MODIFIED */}
+                  {/* INSTALLATION SECTION */}
                   <div className="border-t pt-6 mt-4">
                      <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                         <Wrench className="text-brand-yellow" size={20} /> Professional Installation
@@ -545,7 +548,7 @@ const Checkout: React.FC = () => {
                   </div>
 
                   <div className="md:col-span-2 flex justify-end gap-3 pt-4">
-                      <button onClick={() => setStep('cart')} className="px-6 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">Back</button>
+                      <button onClick={() => setStep('cart')} className="px-6 py-2 text-slate-600 hover:bg-slate-50 rounded-lg font-medium">Back</button>
                       <Button onClick={() => {
                           if(customer.name && customer.email && customer.phone && (deliveryMode === 'pickup' || (customer.address && customer.region))) {
                             setStep('payment');
@@ -599,7 +602,7 @@ const Checkout: React.FC = () => {
                    </div>
 
                    <div className="flex justify-end gap-3 pt-6 border-t mt-4">
-                     <button onClick={() => setStep('shipping')} className="px-6 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">Back</button>
+                     <button onClick={() => setStep('shipping')} className="px-6 py-2 text-slate-600 hover:bg-slate-50 rounded-lg font-medium">Back</button>
                      <Button onClick={handleProcessPayment} disabled={loading}>
                        {loading ? 'Processing...' : `Pay GHS ${grandTotal.toLocaleString()}`}
                      </Button>

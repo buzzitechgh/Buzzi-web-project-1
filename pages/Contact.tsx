@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Send, ChevronDown, Ticket, CheckCircle, Upload, X } from 'lucide-react';
 import Button from '../components/Button';
@@ -76,6 +77,8 @@ const Contact: React.FC = () => {
       setPreview(null);
   };
 
+  const inputClass = "w-full px-4 py-3 rounded-lg border border-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition bg-white text-slate-900 placeholder-slate-500 font-medium shadow-sm";
+
   return (
     <div>
       <section className="bg-slate-900 text-white pt-32 pb-16">
@@ -144,7 +147,7 @@ const Contact: React.FC = () => {
             </div>
 
             {/* Contact Form */}
-            <div className="bg-white p-8 rounded-2xl shadow-xl">
+            <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
               <h3 className="text-2xl font-bold text-slate-900 mb-6">Send us a Message</h3>
               
               {success ? (
@@ -169,48 +172,51 @@ const Contact: React.FC = () => {
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
                     <input 
                       type="text" 
                       name="name"
                       required
                       value={formData.name}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
+                      className={inputClass}
+                      placeholder="Your Name"
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
                       <input 
                         type="email" 
                         name="email"
                         required
                         value={formData.email}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
+                        className={inputClass}
+                        placeholder="email@example.com"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
                       <input 
                         type="tel" 
                         name="phone"
                         required
                         value={formData.phone}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
+                        className={inputClass}
+                        placeholder="050..."
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Service Needed / Inquiry Type</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Service Needed / Inquiry Type</label>
                     <div className="relative">
                       <select 
                         name="service"
                         value={formData.service}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition bg-white text-slate-900 appearance-none hover:border-primary-400 cursor-pointer"
+                        className={`${inputClass} appearance-none cursor-pointer`}
                       >
                         <option value="">Select a Service...</option>
                         <option value="Technical Support">Technical Support (Create Ticket)</option>
@@ -218,29 +224,30 @@ const Contact: React.FC = () => {
                         {SERVICES.map(s => <option key={s.id} value={s.title}>{s.title}</option>)}
                         <option value="Other">Other / General</option>
                       </select>
-                      <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+                      <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" size={20} />
                     </div>
                     {formData.service === 'Technical Support' && (
-                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 font-medium">
                             <Ticket size={12} /> A Support Ticket ID will be generated for tracking.
                         </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Message</label>
                     <textarea 
                       name="message"
                       required
                       rows={4}
                       value={formData.message}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition hover:border-primary-400 bg-white text-slate-900"
+                      className={inputClass}
+                      placeholder="How can we help you?"
                     ></textarea>
                   </div>
 
                   {formData.service === 'Technical Support' && (
-                      <div className="bg-slate-50 p-4 rounded-lg border border-dashed border-gray-300">
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Attach Image (Optional)</label>
+                      <div className="bg-slate-50 p-4 rounded-lg border border-dashed border-slate-300">
+                          <label className="block text-sm font-bold text-slate-700 mb-2">Attach Image (Optional)</label>
                           {preview ? (
                               <div className="relative inline-block">
                                   <img src={preview} alt="Attachment" className="h-24 w-auto rounded border" />
@@ -249,7 +256,7 @@ const Contact: React.FC = () => {
                                   </button>
                               </div>
                           ) : (
-                              <label className="flex items-center gap-2 cursor-pointer text-primary-600 hover:text-primary-700 text-sm">
+                              <label className="flex items-center gap-2 cursor-pointer text-primary-600 hover:text-primary-700 text-sm font-medium">
                                   <Upload size={18} /> <span>Click to upload screenshot/photo</span>
                                   <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
                               </label>

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck, Lock, Unlock, Edit, Upload, User, Camera } from 'lucide-react';
+import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck, Lock, Unlock, Edit, Upload, User, Camera, History } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
 import { ChatMessage, Meeting } from '../types';
@@ -17,7 +17,7 @@ const CustomerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // Rating State
-  const [ratingModal, setRatingModal] = useState<any>(null);
+  const [ratingModal, setRatingModal] = useState<any>(null); // Can be order or booking
   const [ratingVal, setRatingVal] = useState(5);
   const [feedback, setFeedback] = useState("");
   const [newMessage, setNewMessage] = useState("");
@@ -25,6 +25,7 @@ const CustomerDashboard: React.FC = () => {
   // Edit Profile State
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editData, setEditData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [currentPassword, setCurrentPassword] = useState(""); // New field for security
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -80,10 +81,15 @@ const CustomerDashboard: React.FC = () => {
 
   const handleSubmitRating = async () => {
       if (!ratingModal) return;
-      await api.submitRating("Kwame Osei", ratingVal, feedback);
+      
+      // Determine context (Technician or Order)
+      const targetName = ratingModal.technician || `Order #${ratingModal.orderId}`;
+      
+      await api.submitRating(targetName, ratingVal, feedback);
       alert("Thank you for your feedback!");
       setRatingModal(null);
       setFeedback("");
+      setRatingVal(5);
   };
 
   const handleSendMessage = async () => {
@@ -128,6 +134,14 @@ const CustomerDashboard: React.FC = () => {
           return;
       }
 
+      // Check if sensitive info is changed (Email or Password)
+      const isSensitiveChange = (editData.email !== user.email) || (editData.password && editData.password.trim() !== "");
+      
+      if (isSensitiveChange && !currentPassword) {
+          alert("Please enter your Current Password to confirm these changes.");
+          return;
+      }
+
       setIsUpdating(true);
       try {
           let imageUrl = user.verificationImage;
@@ -140,7 +154,8 @@ const CustomerDashboard: React.FC = () => {
               email: editData.email,
               phone: editData.phone,
               password: editData.password || undefined,
-              verificationImage: imageUrl
+              verificationImage: imageUrl,
+              currentPassword: currentPassword // Send to backend for verification
           });
 
           if(res.success) {
@@ -148,7 +163,8 @@ const CustomerDashboard: React.FC = () => {
               localStorage.setItem('customerUser', JSON.stringify(res.user));
               alert("Profile updated successfully");
               setShowEditProfile(false);
-              setEditData(prev => ({...prev, password: '', confirmPassword: ''})); // Clear pass
+              setEditData(prev => ({...prev, password: '', confirmPassword: ''})); 
+              setCurrentPassword(""); // Clear security field
           }
       } catch (e: any) {
           alert(e.message || "Failed to update profile");
@@ -198,7 +214,7 @@ const CustomerDashboard: React.FC = () => {
               <div>
                   <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
                       Hello, {user?.name}
-                      <button onClick={() => setShowEditProfile(true)} className="text-slate-400 hover:text-primary-600 transition">
+                      <button onClick={() => { setShowEditProfile(true); setCurrentPassword(""); }} className="text-slate-400 hover:text-primary-600 transition">
                           <Edit size={18} />
                       </button>
                   </h1>
@@ -219,7 +235,7 @@ const CustomerDashboard: React.FC = () => {
            {/* Column 1: Core Operations */}
            <div className="md:col-span-2 space-y-8">
                
-               {/* Active Appointments (NEW) */}
+               {/* Active Appointments */}
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                      <Calendar className="text-brand-yellow" /> Active Appointments
@@ -252,15 +268,33 @@ const CustomerDashboard: React.FC = () => {
                   )}
                </div>
 
-               {/* Active Orders */}
+               {/* Recent History (Completed Jobs) */}
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                   <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                     <Package className="text-primary-600" /> Recent Orders
+                     <History className="text-slate-500" /> Recent History
                   </h2>
-                  {orders.length === 0 ? (
-                      <p className="text-slate-400 text-sm">No orders found.</p>
+                  {bookings.filter(b => b.status === 'Completed').length === 0 && orders.length === 0 ? (
+                      <p className="text-slate-400 text-sm">No completed jobs or orders yet.</p>
                   ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
+                          {/* Completed Bookings */}
+                          {bookings.filter(b => b.status === 'Completed').map(booking => (
+                              <div key={booking.id} className="border border-gray-100 rounded-xl p-4 flex justify-between items-center">
+                                  <div>
+                                      <h4 className="font-bold text-slate-800 text-sm">{booking.serviceType}</h4>
+                                      <p className="text-xs text-slate-500">Technician: {booking.technician || 'Assigned Tech'}</p>
+                                      <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Completed</span>
+                                  </div>
+                                  <button 
+                                    onClick={() => setRatingModal(booking)}
+                                    className="text-xs bg-brand-yellow text-slate-900 px-3 py-2 rounded-lg font-bold hover:bg-yellow-500 transition shadow-sm flex items-center gap-1"
+                                  >
+                                      <Star size={14} /> Rate Tech
+                                  </button>
+                              </div>
+                          ))}
+
+                          {/* Completed Orders */}
                           {orders.map(order => (
                               <div key={order._id} className="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-shadow">
                                   <div className="flex justify-between items-start mb-2">
@@ -281,9 +315,9 @@ const CustomerDashboard: React.FC = () => {
                                   {order.status === 'Completed' && (
                                       <button 
                                         onClick={() => setRatingModal(order)}
-                                        className="w-full mt-3 text-xs bg-yellow-50 text-yellow-700 py-2 rounded-lg font-medium hover:bg-yellow-100 transition"
+                                        className="w-full mt-3 text-xs bg-slate-100 text-slate-700 py-2 rounded-lg font-medium hover:bg-slate-200 transition"
                                       >
-                                          Rate Service
+                                          Rate Order
                                       </button>
                                   )}
                               </div>
@@ -497,15 +531,27 @@ const CustomerDashboard: React.FC = () => {
                           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
                           <input className={inputVisibleClass} value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} />
                       </div>
+                      
+                      {/* Security Section - Updated */}
                       <div className="border-t pt-4 mt-2">
                           <p className="text-xs text-slate-400 mb-2 italic">Change Password (Optional)</p>
                           <div className="space-y-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Password</label>
+                                  <input 
+                                    type="password" 
+                                    className={`${inputVisibleClass} ${!currentPassword && (editData.email !== user.email || editData.password) ? 'border-red-300 bg-red-50' : ''}`}
+                                    placeholder="Required for sensitive changes" 
+                                    value={currentPassword} 
+                                    onChange={e => setCurrentPassword(e.target.value)} 
+                                  />
+                              </div>
                               <div>
                                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
                                   <input type="password" className={inputVisibleClass} placeholder="New password" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} />
                               </div>
                               <div>
-                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm New Password</label>
                                   <input type="password" className={inputVisibleClass} placeholder="Confirm new password" value={editData.confirmPassword} onChange={e => setEditData({...editData, confirmPassword: e.target.value})} />
                               </div>
                           </div>
@@ -525,7 +571,11 @@ const CustomerDashboard: React.FC = () => {
           <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
               <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
                   <h3 className="text-lg font-bold text-slate-900 mb-2">Rate Your Experience</h3>
-                  <p className="text-sm text-slate-500 mb-4">How was the service for Order {ratingModal.orderId}?</p>
+                  <p className="text-sm text-slate-500 mb-4">
+                      {ratingModal.technician 
+                        ? `How was the service provided by ${ratingModal.technician}?`
+                        : `How was your experience for Order ${ratingModal.orderId}?`}
+                  </p>
                   
                   <div className="flex justify-center gap-2 mb-4">
                       {[1,2,3,4,5].map(star => (
@@ -538,13 +588,13 @@ const CustomerDashboard: React.FC = () => {
                   <textarea 
                     className="w-full border p-3 rounded-lg text-sm mb-4" 
                     rows={3} 
-                    placeholder="Write a review..."
+                    placeholder={ratingModal.technician ? "Review the technician..." : "Write a review..."}
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                   ></textarea>
 
                   <div className="flex gap-2">
-                      <button onClick={() => setRatingModal(null)} className="flex-1 py-2 text-slate-500 hover:bg-slate-50 rounded-lg">Cancel</button>
+                      <button onClick={() => { setRatingModal(null); setRatingVal(5); setFeedback(""); }} className="flex-1 py-2 text-slate-500 hover:bg-slate-50 rounded-lg">Cancel</button>
                       <Button onClick={handleSubmitRating} className="flex-1 py-2">Submit</Button>
                   </div>
               </div>

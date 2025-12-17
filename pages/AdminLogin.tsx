@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, User, AlertCircle, ArrowLeft, Key, CheckCircle, Shield } from 'lucide-react';
@@ -23,6 +24,10 @@ const AdminLogin: React.FC = () => {
   const [is2FA, setIs2FA] = useState(false);
 
   const navigate = useNavigate();
+
+  // Consistent Input Style
+  const inputClass = "w-full pl-10 pr-4 py-3 border border-slate-400 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-slate-900 bg-white placeholder-slate-500 font-medium shadow-sm transition-all";
+  const codeInputClass = "w-full px-4 py-3 border border-slate-400 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-slate-900 bg-white text-center font-mono text-lg tracking-widest placeholder-slate-400 shadow-sm transition-all";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,13 +161,13 @@ const AdminLogin: React.FC = () => {
 
                 {resetStep === 1 && (
                     <div className="animate-in fade-in slide-in-from-right-4">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Enter Admin Email</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Enter Admin Email</label>
                         <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                             <input 
                                 type="email" required
                                 value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white"
+                                className={inputClass}
                                 placeholder="admin@buzzitech.com"
                                 autoFocus
                             />
@@ -172,30 +177,30 @@ const AdminLogin: React.FC = () => {
 
                 {resetStep === 2 && (
                     <div className="animate-in fade-in slide-in-from-right-4">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Verification Code</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Verification Code</label>
                         <div className="relative">
                             <input 
                                 type="text" required
                                 value={resetCode} onChange={(e) => setResetCode(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white text-center font-mono text-lg tracking-widest"
+                                className={codeInputClass}
                                 placeholder="000000"
                                 maxLength={6}
                                 autoFocus
                             />
                         </div>
-                        <p className="text-xs text-slate-400 mt-2 text-center">Check email for 6-digit code.</p>
+                        <p className="text-xs text-slate-500 mt-2 text-center font-medium">Check email for 6-digit code.</p>
                     </div>
                 )}
 
                 {resetStep === 3 && (
                     <div className="animate-in fade-in slide-in-from-right-4">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">New Password</label>
                         <div className="relative">
-                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                             <input 
                                 type="password" required
                                 value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white"
+                                className={inputClass}
                                 placeholder="Create new password"
                                 autoFocus
                             />
@@ -208,7 +213,7 @@ const AdminLogin: React.FC = () => {
                 </Button>
                 
                 <div className="text-center mt-4">
-                    <button type="button" onClick={() => { setShowForgotPass(false); setResetStep(1); setError(''); setResetMessage(''); }} className="text-sm text-slate-500 hover:text-slate-800 underline">
+                    <button type="button" onClick={() => { setShowForgotPass(false); setResetStep(1); setError(''); setResetMessage(''); }} className="text-sm text-slate-500 hover:text-slate-800 underline font-medium">
                         Cancel
                     </button>
                 </div>
@@ -216,25 +221,25 @@ const AdminLogin: React.FC = () => {
         ) : is2FA ? (
             <form onSubmit={handle2FAVerify} className="space-y-5">
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">2FA Verification Code</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">2FA Verification Code</label>
                     <div className="relative">
-                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                         <input 
                             type="text" required
                             value={resetCode} onChange={(e) => setResetCode(e.target.value.replace(/[^0-9]/g, ''))}
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white tracking-widest"
+                            className={`${inputClass} tracking-widest pl-10`}
                             placeholder="000000"
                             maxLength={6}
                             autoFocus
                         />
                     </div>
-                    <p className="text-xs text-slate-400 mt-2 text-center">Code sent to {resetEmail}</p>
+                    <p className="text-xs text-slate-500 mt-2 text-center font-medium">Code sent to {resetEmail}</p>
                 </div>
                 <Button type="submit" className="w-full py-3" disabled={loading}>
                     {loading ? 'Verifying...' : 'Verify & Login'}
                 </Button>
                 <div className="text-center mt-4">
-                    <button type="button" onClick={() => { setIs2FA(false); setResetMessage(""); }} className="text-sm text-slate-500 hover:text-slate-800 underline">
+                    <button type="button" onClick={() => { setIs2FA(false); setResetMessage(""); }} className="text-sm text-slate-500 hover:text-slate-800 underline font-medium">
                         Cancel
                     </button>
                 </div>
@@ -242,15 +247,15 @@ const AdminLogin: React.FC = () => {
         ) : (
             <form onSubmit={handleLogin} className="space-y-5">
             <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
                 <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input 
                     type="email" 
                     required
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white"
+                    className={inputClass}
                     placeholder="admin@buzzitech.com"
                 />
                 </div>
@@ -258,19 +263,19 @@ const AdminLogin: React.FC = () => {
 
             <div>
                 <div className="flex justify-between items-center mb-1">
-                    <label className="block text-sm font-medium text-slate-700">Password</label>
-                    <button type="button" onClick={() => { setShowForgotPass(true); setError(''); setResetMessage(''); }} className="text-xs text-primary-600 hover:text-primary-800">
+                    <label className="block text-sm font-bold text-slate-700">Password</label>
+                    <button type="button" onClick={() => { setShowForgotPass(true); setError(''); setResetMessage(''); }} className="text-xs text-primary-600 hover:text-primary-800 font-medium">
                         Forgot Password?
                     </button>
                 </div>
                 <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input 
                     type="password" 
                     required
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 bg-white"
+                    className={inputClass}
                     placeholder="••••••••"
                 />
                 </div>

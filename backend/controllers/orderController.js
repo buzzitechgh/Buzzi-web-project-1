@@ -1,3 +1,4 @@
+
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const { sendEmail } = require('../services/emailService');
@@ -8,8 +9,13 @@ const { sendEmail } = require('../services/emailService');
 const addOrderItems = async (req, res) => {
   const { items, total, customer, deliveryMode, paymentMethod, id } = req.body;
 
-  if (items && items.length === 0) {
+  // SECURITY: Input Validation
+  if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'No order items' });
+  }
+
+  if (total <= 0) {
+      return res.status(400).json({ message: 'Invalid total amount' });
   }
 
   const order = new Order({

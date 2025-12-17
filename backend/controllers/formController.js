@@ -1,8 +1,14 @@
+
 const { sendEmail } = require('../services/emailService');
 const SystemSetting = require('../models/SystemSetting');
 
 const submitContact = async (req, res) => {
   const { name, email, phone, service, message } = req.body;
+  
+  // SECURITY: Input Validation
+  if (!name || typeof name !== 'string' || name.length > 100) return res.status(400).json({ message: 'Invalid name' });
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) return res.status(400).json({ message: 'Invalid email' });
   
   // 1. Send Email Notification (Standard)
   await sendEmail(
@@ -47,6 +53,10 @@ const submitContact = async (req, res) => {
 const submitBooking = async (req, res) => {
   const { name, email, phone, date, time, serviceType } = req.body;
   
+  // SECURITY: Input Validation
+  if (!name || name.length > 100) return res.status(400).json({ message: 'Invalid name' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Invalid email' });
+
   await sendEmail(
     process.env.ADMIN_EMAIL,
     `Booking Request: ${serviceType}`,
@@ -57,8 +67,19 @@ const submitBooking = async (req, res) => {
 };
 
 const submitQuote = async (req, res) => {
-  // Logic to save quote to DB could go here
   const { name, email, serviceType, grandTotal } = req.body;
+
+  // SECURITY: Input Validation
+  if (!name || typeof name !== 'string' || name.length > 100) {
+      return res.status(400).json({ message: 'Invalid name' });
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+  }
+  if (grandTotal === undefined || typeof grandTotal !== 'number' || grandTotal < 0) {
+      return res.status(400).json({ message: 'Invalid total amount' });
+  }
   
   await sendEmail(
     process.env.ADMIN_EMAIL,

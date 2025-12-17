@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, CheckCircle, ChevronDown, ChevronUp, Plus, Trash2, ShoppingCart, Info, MessageSquare, Send } from 'lucide-react';
 import Button from '../components/Button';
@@ -37,9 +38,9 @@ const PRODUCT_CATALOG = [
 ];
 
 const Quote: React.FC = () => {
-  const inputClass = "w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none transition placeholder-gray-400";
-  const contactInputClass = "w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-slate-900 outline-none transition placeholder-gray-400"; // No focus highlight
-  const selectClass = "w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none appearance-none cursor-pointer";
+  // High contrast styles
+  const inputClass = "w-full px-4 py-3 rounded-lg bg-white border border-slate-400 text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition placeholder-slate-500 font-medium shadow-sm";
+  const selectClass = "w-full px-4 py-3 rounded-lg bg-white border border-slate-400 text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none appearance-none cursor-pointer font-medium shadow-sm";
 
   // State for Form
   const [contactInfo, setContactInfo] = useState({
@@ -256,15 +257,15 @@ const Quote: React.FC = () => {
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="col-span-1">
                         <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Full Name</label>
-                        <input type="text" name="name" required placeholder="John Doe" value={contactInfo.name} onChange={handleContactChange} className={contactInputClass} />
+                        <input type="text" name="name" required placeholder="John Doe" value={contactInfo.name} onChange={handleContactChange} className={inputClass} />
                     </div>
                     <div className="col-span-1">
                         <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Email Address</label>
-                        <input type="email" name="email" required placeholder="john@example.com" value={contactInfo.email} onChange={handleContactChange} className={contactInputClass} />
+                        <input type="email" name="email" required placeholder="john@example.com" value={contactInfo.email} onChange={handleContactChange} className={inputClass} />
                     </div>
                     <div className="col-span-1">
                         <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Phone Number</label>
-                        <input type="tel" name="phone" required placeholder="xxxxxxxxxx" value={contactInfo.phone} onChange={handleContactChange} className={contactInputClass} />
+                        <input type="tel" name="phone" required placeholder="xxxxxxxxxx" value={contactInfo.phone} onChange={handleContactChange} className={inputClass} />
                     </div>
                     <div className="relative col-span-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Project Timeline</label>
@@ -274,7 +275,7 @@ const Quote: React.FC = () => {
                          <option value="Within 1 week">Within 1 week</option>
                          <option value="Flexible">Flexible</option>
                       </select>
-                      <ChevronDown className="absolute right-4 top-[2.2rem] text-gray-500 pointer-events-none" size={18} />
+                      <ChevronDown className="absolute right-4 top-[2.2rem] text-slate-500 pointer-events-none" size={18} />
                     </div>
                     
                     {/* Service Type Dropdown & Description */}
@@ -286,7 +287,7 @@ const Quote: React.FC = () => {
                            {SERVICES.map(s => <option key={s.id} value={s.title}>{s.title}</option>)}
                            <option value="General IT Support">General IT Support</option>
                         </select>
-                        <ChevronDown className="absolute right-4 top-[2.2rem] text-gray-500 pointer-events-none" size={18} />
+                        <ChevronDown className="absolute right-4 top-[2.2rem] text-slate-500 pointer-events-none" size={18} />
                       </div>
 
                       {selectedServiceObj && (
@@ -345,7 +346,7 @@ const Quote: React.FC = () => {
                                 <option key={cat.category} value={cat.category}>{cat.category}</option>
                               ))}
                             </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={18} />
                           </div>
                         </div>
 
@@ -364,7 +365,7 @@ const Quote: React.FC = () => {
                                 </option>
                               ))}
                             </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={18} />
                           </div>
                         </div>
 
@@ -403,7 +404,7 @@ const Quote: React.FC = () => {
                             <button 
                               type="button"
                               onClick={handleAddItem}
-                              className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition flex items-center justify-center shadow-sm"
+                              className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition flex items-center justify-center shadow-sm border border-transparent"
                             >
                               <Plus size={20} /> <span className="ml-2 font-medium">Add</span>
                             </button>

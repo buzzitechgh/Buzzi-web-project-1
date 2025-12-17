@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Filter, Search, Plus, ArrowUpDown, AlertCircle } from 'lucide-react';
@@ -68,6 +69,8 @@ const Store: React.FC = () => {
   const targetX = typeof window !== 'undefined' ? window.innerWidth - (isMobile ? 80 : 150) : 0;
   const targetY = 30; // Approx header height center
 
+  const inputClass = "pl-10 pr-4 py-2.5 rounded-lg border border-slate-400 w-full md:w-64 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white text-slate-900 placeholder-slate-500 font-medium shadow-sm transition-all";
+
   return (
     <div className="bg-gray-50 min-h-screen relative overflow-x-hidden">
       
@@ -119,24 +122,24 @@ const Store: React.FC = () => {
             
             <div className="w-full md:w-auto flex flex-col md:flex-row gap-3">
               <div className="relative flex-grow md:flex-grow-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input 
                   type="text" 
                   placeholder="Search devices..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 w-full md:w-64 focus:ring-2 focus:ring-primary-500 outline-none bg-white text-slate-900"
+                  className={inputClass}
                 />
               </div>
               
               <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
                   <ArrowUpDown size={16} />
                 </div>
                 <select 
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                  className="pl-10 pr-8 py-2.5 rounded-lg border border-gray-300 bg-white text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none appearance-none cursor-pointer w-full md:w-auto"
+                  className="pl-10 pr-8 py-2.5 rounded-lg border border-slate-400 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none appearance-none cursor-pointer w-full md:w-auto font-medium shadow-sm transition-all"
                 >
                   <option value="asc">Price: Low to High</option>
                   <option value="desc">Price: High to Low</option>
@@ -155,10 +158,10 @@ const Store: React.FC = () => {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap border ${
                   selectedCategory === cat 
-                    ? 'bg-slate-900 text-white' 
-                    : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                    ? 'bg-slate-900 text-white border-slate-900' 
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
               >
                 {cat}

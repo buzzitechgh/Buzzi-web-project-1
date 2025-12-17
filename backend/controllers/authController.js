@@ -15,10 +15,30 @@ const generateToken = (id) => {
 const registerUser = async (req, res) => {
   const { name, email, password, phone, role, department, subRole, verificationImage } = req.body;
 
+  // SECURITY: Input Validation
+  // 1. Email Format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+  }
+
+  // 2. Password Strength
+  if (!password || password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+  }
+
   try {
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
+    }
+
+    // SECURITY: Prevent Privilege Escalation
+    // Force role to 'customer' unless explicitly 'technician'. 
+    // Never allow 'admin' creation via public endpoint.
+    let safeRole = 'customer';
+    if (role === 'technician') {
+        safeRole = 'technician';
     }
 
     // Generate Verification Code (OTP)
@@ -29,7 +49,7 @@ const registerUser = async (req, res) => {
     let technicianId = undefined;
     let isApproved = true; // Customers are auto-approved
 
-    if (role === 'technician') {
+    if (safeRole === 'technician') {
         const randomNum = Math.floor(1000 + Math.random() * 9000);
         technicianId = `TECH-${randomNum}`;
         isApproved = false; // Technicians require Admin Approval
@@ -40,9 +60,9 @@ const registerUser = async (req, res) => {
       email,
       password,
       phone,
-      role: role || 'customer',
-      department: role === 'technician' ? department : undefined,
-      subRole: role === 'technician' ? subRole : undefined,
+      role: safeRole,
+      department: safeRole === 'technician' ? department : undefined,
+      subRole: safeRole === 'technician' ? subRole : undefined,
       technicianId,
       verificationImage,
       otp,
@@ -327,13 +347,27 @@ const approveUser = async (req, res) => {
     }
 };
 
-// @desc    Update User Profile
+// @desc    Update User Profile (Self)
 // @route   PUT /api/auth/profile
 // @access  Private
 const updateUserProfile = async (req, res) => {
   const user = await User.findById(req.user._id);
 
   if (user) {
+    // SECURITY: Require current password if changing email or password
+    // This prevents account takeover if a user leaves a session open
+    if (req.body.email && req.body.email !== user.email || (req.body.password && req.body.password.trim() !== '')) {
+        const { currentPassword } = req.body;
+        
+        if (!currentPassword) {
+            return res.status(400).json({ message: 'Current password required for sensitive changes.' });
+        }
+
+        if (!(await user.matchPassword(currentPassword))) {
+            return res.status(401).json({ message: 'Invalid current password.' });
+        }
+    }
+
     user.name = req.body.name || user.name;
     user.phone = req.body.phone || user.phone;
     
@@ -349,7 +383,7 @@ const updateUserProfile = async (req, res) => {
     if (req.body.verificationImage) {
         user.verificationImage = req.body.verificationImage;
     }
-    if (req.body.password) {
+    if (req.body.password && req.body.password.trim() !== '') {
       user.password = req.body.password;
     }
 

@@ -1,3 +1,4 @@
+
 import { ContactFormData, AppointmentFormData, QuoteFormData, Order, Product, Technician, ChatMessage, Meeting, User, KnowledgeEntry, LoginLog } from '../types';
 import { KNOWLEDGE_BASE, FALLBACK_ANSWER } from '../data/knowledgeBase';
 import { PRODUCTS as LOCAL_PRODUCTS } from '../data/products'; 
@@ -331,6 +332,26 @@ export const api = {
       }
   },
 
+  // Admin Update User
+  adminUpdateUser: async (userId: string, userData: any, token: string) => {
+      try {
+          return await authFetch(`/admin/users/${userId}`, {
+              method: 'PUT',
+              body: JSON.stringify(userData)
+          });
+      } catch (e) {
+          // Mock
+          const user = MOCK_USERS.find(u => u.id === userId);
+          if (user) {
+              if (userData.name) user.name = userData.name;
+              if (userData.email) user.email = userData.email;
+              if (userData.role) user.role = userData.role;
+              if (userData.status) user.status = userData.status;
+          }
+          return { success: true, user };
+      }
+  },
+
   updateProfile: async (userData: any) => {
       try {
           const result = await authFetch('/auth/profile', {
@@ -603,6 +624,10 @@ export const api = {
   },
 
   getAdminQuotes: async (token: string) => [], 
+  deleteQuote: async (id: string, token: string) => {
+      // Mock deletion
+      return { success: true };
+  },
 
   // --- USER & TECH MANAGEMENT ---
   getUsers: async () => {

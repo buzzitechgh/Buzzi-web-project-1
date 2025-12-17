@@ -1,3 +1,4 @@
+
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
@@ -238,4 +239,56 @@ const updateSystemSettings = async (req, res) => {
   }
 };
 
-module.exports = { getDashboardStats, getSystemSettings, updateSystemSettings };
+// @desc    Update any user profile by Admin
+// @route   PUT /api/admin/users/:id
+// @access  Private/Admin
+const updateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (user) {
+      // AUDIT LOGGING: Record the action before saving
+      const changes = [];
+      if (req.body.role && req.body.role !== user.role) changes.push(`Role: ${user.role} -> ${req.body.role}`);
+      if (req.body.status && req.body.status !== user.status) changes.push(`Status: ${user.status} -> ${req.body.status}`);
+      if (req.body.email && req.body.email !== user.email) changes.push(`Email: ${user.email} -> ${req.body.email}`);
+      if (req.body.password && req.body.password.trim() !== '') changes.push('Password Changed');
+      
+      if (changes.length > 0) {
+          console.log(`[AUDIT] Admin ${req.user.email} updated User ${user.email} (${user._id}). Changes: ${changes.join(', ')}`);
+      }
+
+      user.name = req.body.name || user.name;
+      user.email = req.body.email || user.email;
+      user.role = req.body.role || user.role;
+      user.status = req.body.status || user.status;
+      if (req.body.phone) user.phone = req.body.phone;
+      
+      if (req.body.isApproved !== undefined) {
+          user.isApproved = req.body.isApproved;
+      }
+
+      if (req.body.password && req.body.password.trim() !== '') {
+          user.password = req.body.password; // Hash handled by model hook
+      }
+
+      const updatedUser = await user.save();
+      res.json({
+        success: true,
+        user: {
+          id: updatedUser._id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          status: updatedUser.status
+        }
+      });
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Update failed', error: error.message });
+  }
+};
+
+module.exports = { getDashboardStats, getSystemSettings, updateSystemSettings, updateUser };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Search, Package, Truck, CheckCircle, Clock, MapPin, AlertCircle, Phone, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
@@ -95,11 +96,11 @@ const OrderTracking: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
             <form onSubmit={handleTrack} className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-grow">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
                 <input 
                   type="text" 
                   placeholder="Enter Order ID (e.g. ORD-1715623)" 
-                  className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none text-lg text-slate-900 transition-all font-medium"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-400 bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-lg text-slate-900 placeholder-slate-500 transition-all font-medium shadow-sm"
                   value={orderId}
                   onChange={(e) => setOrderId(e.target.value)}
                 />
@@ -110,9 +111,9 @@ const OrderTracking: React.FC = () => {
             </form>
 
             {error && (
-              <div className="mt-6 bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 border border-red-100">
+              <div className="mt-6 bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 border border-red-100 font-medium">
                 <AlertCircle size={20} />
-                <span className="font-medium">{error}</span>
+                <span>{error}</span>
               </div>
             )}
           </div>
