@@ -60,7 +60,8 @@ const systemSettingSchema = mongoose.Schema({
     webhooks: {
       orderCreated: { type: String },
       ticketCreated: { type: String },
-      quoteRequested: { type: String }
+      quoteRequested: { type: String },
+      callbackRequested: { type: String }
     }
   },
 

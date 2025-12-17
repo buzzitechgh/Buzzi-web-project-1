@@ -257,6 +257,7 @@ const AdminDashboard: React.FC = () => {
               n8nWebhook: settingsData.n8n?.webhooks?.orderCreated || prev.n8nWebhook,
               n8nChatWebhook: settingsData.n8n?.webhooks?.ticketCreated || prev.n8nChatWebhook, 
               n8nQuoteWebhook: settingsData.n8n?.webhooks?.quoteRequested || prev.n8nQuoteWebhook,
+              n8nCallbackWebhook: settingsData.n8n?.webhooks?.callbackRequested || prev.n8nCallbackWebhook,
               twoFactorEnforced: settingsData.security?.twoFactorEnforced || false,
           }));
           
@@ -627,7 +628,7 @@ const AdminDashboard: React.FC = () => {
               payments: { gateway: settings.paymentGateway, paystack: { publicKey: settings.paystackPublicKey, secretKey: settings.paystackSecretKey } },
               sms: { provider: settings.smsProvider, senderId: settings.smsSenderId, apiKey: settings.smsApiKey },
               email: { smtp: { host: settings.smtpHost, user: settings.smtpUser, pass: settings.smtpPass } },
-              n8n: { webhooks: { orderCreated: settings.n8nWebhook, ticketCreated: settings.n8nChatWebhook, quoteRequested: settings.n8nQuoteWebhook } },
+              n8n: { webhooks: { orderCreated: settings.n8nWebhook, ticketCreated: settings.n8nChatWebhook, quoteRequested: settings.n8nQuoteWebhook, callbackRequested: settings.n8nCallbackWebhook } },
               formspreeUrl: settings.formspreeUrl,
               security: { twoFactorEnforced: settings.twoFactorEnforced },
               // Save dynamic roles/departments
@@ -1340,7 +1341,11 @@ const AdminDashboard: React.FC = () => {
                       <div className="space-y-4">
                           <div><label className={labelStyle}>Main Webhook URL (n8n)</label><input className={inputStyle} value={settings.n8nWebhook} onChange={e => setSettings({...settings, n8nWebhook: e.target.value})} placeholder="https://your-n8n-instance.com/webhook/..." /></div>
                           <div><label className={labelStyle}>Formspree Endpoint</label><input className={inputStyle} value={settings.formspreeUrl} onChange={e => setSettings({...settings, formspreeUrl: e.target.value})} placeholder="https://formspree.io/f/..." /></div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className={labelStyle}>Chatbot Webhook</label><input className={inputStyle} value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} /></div><div><label className={labelStyle}>Quote Generator Webhook</label><input className={inputStyle} value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} /></div></div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div><label className={labelStyle}>Chatbot Webhook</label><input className={inputStyle} value={settings.n8nChatWebhook} onChange={e => setSettings({...settings, n8nChatWebhook: e.target.value})} /></div>
+                              <div><label className={labelStyle}>Quote Generator Webhook</label><input className={inputStyle} value={settings.n8nQuoteWebhook} onChange={e => setSettings({...settings, n8nQuoteWebhook: e.target.value})} /></div>
+                              <div className="md:col-span-2"><label className={labelStyle}>Request Call Webhook (AI Voice Auto-Call)</label><input className={inputStyle} value={settings.n8nCallbackWebhook} onChange={e => setSettings({...settings, n8nCallbackWebhook: e.target.value})} placeholder="n8n Webhook to trigger AI Voice Assistant Call..." /></div>
+                          </div>
                       </div>
                   </div>
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">

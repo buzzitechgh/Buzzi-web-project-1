@@ -70,7 +70,33 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
-      return { success: true, message: "Message Sent Successfully" };
+      
+      // Update Mock Data for UI (Optimistic)
+      const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (data.service === 'Technical Support') {
+          MOCK_MESSAGES.unshift({
+              id: ticketId,
+              subject: data.service,
+              message: data.message,
+              sender: data.name,
+              email: data.email,
+              status: 'Open',
+              date: new Date().toISOString()
+          });
+      } else {
+          // Add general inquiries too so they appear in dashboard
+          MOCK_MESSAGES.unshift({
+              id: `MSG-${Date.now()}`,
+              subject: data.service,
+              message: data.message,
+              sender: data.name,
+              email: data.email,
+              status: 'Open',
+              date: new Date().toISOString()
+          });
+      }
+
+      return { success: true, message: "Message Sent Successfully", ticketId };
     } catch (e) {
       console.error("Form submit error", e);
       return { success: false, message: "Failed to send message. Please try again." };
@@ -84,6 +110,20 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'Lead', email: 'no-reply@lead.com', phone: contact, service: 'Quick Callback', message: `Callback requested for: ${contact}` })
         });
+
+        // Optimistic update for Admin Dashboard
+        MOCK_MESSAGES.unshift({
+            id: `lead-${Date.now()}`,
+            subject: 'Quick Callback Request',
+            message: `Callback requested for: ${contact}`,
+            sender: 'Guest Lead',
+            email: 'no-reply@lead.com',
+            phone: contact,
+            service: 'Quick Callback',
+            status: 'Open',
+            date: new Date().toISOString()
+        });
+
         return { success: true };
     } catch(e) {
         return { success: false };
@@ -97,6 +137,20 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
+      
+      // Update Mock Data for UI (Optimistic)
+      MOCK_BOOKINGS.unshift({
+          id: `bk-${Date.now()}`,
+          name: data.name,
+          email: data.email,
+          serviceType: data.serviceType,
+          date: data.date,
+          time: data.time,
+          status: 'Pending',
+          technician: null,
+          completionCode: Math.floor(1000 + Math.random() * 9000).toString()
+      });
+
       return { success: true, message: "Booking Request Sent" };
     } catch (e) {
       console.error(e);
@@ -374,13 +428,11 @@ export const api = {
 
   trackOrder: async (orderId: string) => {
       try {
-          const res = await fetch(`${API_URL}/orders`); 
-          const orders = await res.json().catch(() => []); 
-          const order = orders.find((o: any) => o.orderId === orderId);
-          if (order) return order;
-          throw new Error("Order not found");
-      } catch (e) {
+          // Note: Backend doesn't support public ID fetch, so this requires admin auth usually.
+          // Fallback to error to prompt user to contact support if not found in public scope.
           throw new Error("Tracking unavailable");
+      } catch (e) {
+          throw new Error("Order not found or access denied.");
       }
   },
 
@@ -415,16 +467,12 @@ export const api = {
 
   uploadKnowledgeBase: async (file: File, token: string) => {
       try {
-          // Use FormData to send the file to the backend
           const formData = new FormData();
           formData.append('file', file);
 
           const response = await fetch(`${API_URL}/knowledge/upload`, {
               method: 'POST',
-              headers: {
-                  Authorization: `Bearer ${token}`
-                  // Content-Type is set automatically by browser with boundary
-              },
+              headers: { Authorization: `Bearer ${token}` },
               body: formData
           });
 
@@ -436,7 +484,6 @@ export const api = {
           return await response.json();
       } catch (e: any) {
           console.error("Upload error:", e);
-          // Fallback logic for demo/offline mode
           return { success: true, count: 1, message: "Mock upload: File processed (Offline Mode)" };
       }
   },
@@ -479,11 +526,11 @@ export const api = {
         const data = await authFetch('/admin/dashboard');
         return data;
       } catch (e) {
-        // Fallback Mock with structure matching AdminDashboard expectations
+        // Fallback Mock
         return {
            overview: {
              users: MOCK_USERS.length,
-             orders: 120, // Mocked
+             orders: 120, 
              revenue: 45200,
              technicians: MOCK_TECHNICIANS.length,
              pendingOrders: 5,
@@ -493,12 +540,7 @@ export const api = {
              loggedInUsers: 3
            },
            charts: {
-             revenue: [
-                { _id: 1, total: 1200 }, { _id: 2, total: 1900 }, { _id: 3, total: 1500 }, 
-                { _id: 4, total: 2200 }, { _id: 5, total: 1800 }, { _id: 6, total: 2800 },
-                { _id: 7, total: 3500 }, { _id: 8, total: 3100 }, { _id: 9, total: 4200 },
-                { _id: 10, total: 4500 }, { _id: 11, total: 5000 }, { _id: 12, total: 5500 }
-             ]
+             revenue: []
            },
            activity: [],
            health: { database: 'Mock', emailService: 'Mock', paymentGateway: 'Mock' }
@@ -537,7 +579,7 @@ export const api = {
 
   getAdminQuotes: async (token: string) => [], 
 
-  // --- USER & TECH MANAGEMENT (With Fallback) ---
+  // --- USER & TECH MANAGEMENT ---
   getUsers: async () => {
       try {
           return MOCK_USERS;
@@ -547,9 +589,18 @@ export const api = {
   },
   
   createUser: async (userData: Partial<User>) => {
-      const u = { ...userData, id: `u-${Date.now()}`, status: 'Active', isOnline: false, isApproved: true } as User;
-      MOCK_USERS.push(u);
-      return { success: true, user: u };
+      // To create a real user, we should use the auth register endpoint
+      try {
+          return await api.register({
+              ...userData,
+              role: 'customer'
+          });
+      } catch (e) {
+          // Mock fallback
+          const u = { ...userData, id: `u-${Date.now()}`, status: 'Active', isOnline: false, isApproved: true } as User;
+          MOCK_USERS.push(u);
+          return { success: true, user: u };
+      }
   },
   updateUserRole: async (userId: string, role: string) => {
       const u = MOCK_USERS.find(user => user.id === userId);
@@ -572,6 +623,16 @@ export const api = {
   },
   
   addTechnician: async (techData: Partial<Technician>, token: string) => {
+      // Actually register the technician in the backend
+      try {
+          await api.register({
+              ...techData,
+              role: 'technician'
+          });
+      } catch (e) {
+          console.warn("Backend registration failed, using local mock", e);
+      }
+      
       const t = { ...techData, id: `t-${Date.now()}` } as Technician;
       MOCK_TECHNICIANS.push(t);
       return { success: true, technicians: MOCK_TECHNICIANS };
@@ -590,8 +651,6 @@ export const api = {
   
   scheduleMeeting: async (meetingData: any) => {
       const id = Math.random().toString(36).substr(2, 9);
-      
-      // Auto-generate link if not provided based on platform
       let link = meetingData.link || 'https://zoom.us/j/demo';
       if (!meetingData.link) {
           if (meetingData.platform === 'Google Meet') link = `https://meet.google.com/${id}-${id}`;
@@ -618,21 +677,44 @@ export const api = {
 
   // --- CUSTOMER DASHBOARD HELPERS ---
   getCustomerOrders: async (email: string) => {
-      return []; 
+      try {
+          const orders = await authFetch('/orders');
+          // Backend now filters orders for us based on token
+          return orders;
+      } catch (e) {
+          return [];
+      }
   },
   getCustomerTickets: async (email: string) => MOCK_MESSAGES.filter(m => m.email === email),
   getCustomerBookings: async (email: string) => MOCK_BOOKINGS.filter(b => b.email === email),
   submitRating: async (techName: string, rating: number, feedback: string) => ({ success: true }),
-  getTechnicianTasks: async (techName: string) => [],
+  
+  getTechnicianTasks: async (techName: string) => {
+      // Filter mock bookings for assigned tech
+      return MOCK_BOOKINGS.filter(b => b.technician === techName);
+  },
   verifyJobCompletion: async (taskId: string, code: string) => ({ success: true }),
   updateTaskStatus: async (taskId: string, status: string) => ({ success: true }),
 
-  // --- SETTINGS (Local Storage) ---
+  // --- SETTINGS (Persisted to Backend) ---
   getSettings: async (token: string) => {
-      const saved = localStorage.getItem('buzzitech_settings');
-      return saved ? JSON.parse(saved) : {};
+      try {
+          if (!token) throw new Error("No token");
+          return await authFetch('/admin/settings');
+      } catch (e) {
+          const saved = localStorage.getItem('buzzitech_settings');
+          return saved ? JSON.parse(saved) : {};
+      }
   },
   saveSettings: async (settings: any, token: string) => {
+      try {
+          await authFetch('/admin/settings', {
+              method: 'PUT',
+              body: JSON.stringify(settings)
+          });
+      } catch (e) {
+          console.warn("Failed to save settings to backend, saving locally.");
+      }
       localStorage.setItem('buzzitech_settings', JSON.stringify(settings));
       window.dispatchEvent(new Event('settingsUpdated'));
       return { success: true };
