@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck, Lock, Unlock } from 'lucide-react';
+import { Package, Ticket, Star, LogOut, ChevronRight, MessageSquare, Clock, Video, Monitor, Download, Smile, Paperclip, Calendar, ShieldCheck, Lock, Unlock, Edit, Upload, User, Camera } from 'lucide-react';
 import { api } from '../services/api';
 import Button from '../components/Button';
 import { ChatMessage, Meeting } from '../types';
@@ -21,10 +22,20 @@ const CustomerDashboard: React.FC = () => {
   const [feedback, setFeedback] = useState("");
   const [newMessage, setNewMessage] = useState("");
 
+  // Edit Profile State
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editData, setEditData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
   // Chat Interaction States
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojis = ["👍", "👋", "😊", "😂", "❤️", "🔥", "🎉", "✅", "❌", "🤔", "💻", "🔧"];
+
+  // Styles
+  const inputVisibleClass = "w-full border border-slate-400 bg-slate-50 p-3 rounded-lg text-sm outline-none focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all text-slate-900 placeholder-slate-400 font-medium";
 
   useEffect(() => {
     const storedUser = localStorage.getItem('customerUser');
@@ -34,6 +45,8 @@ const CustomerDashboard: React.FC = () => {
     }
     const parsedUser = JSON.parse(storedUser);
     setUser(parsedUser);
+    setEditData({ name: parsedUser.name || '', email: parsedUser.email || '', phone: parsedUser.phone || '', password: '', confirmPassword: '' });
+    if(parsedUser.verificationImage) setProfileImagePreview(parsedUser.verificationImage);
     fetchData(parsedUser.email);
   }, [navigate]);
 
@@ -99,6 +112,51 @@ const CustomerDashboard: React.FC = () => {
       }
   };
 
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(file) {
+          setProfileImage(file);
+          const reader = new FileReader();
+          reader.onloadend = () => setProfileImagePreview(reader.result as string);
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleUpdateProfile = async () => {
+      if (editData.password && editData.password !== editData.confirmPassword) {
+          alert("Passwords do not match!");
+          return;
+      }
+
+      setIsUpdating(true);
+      try {
+          let imageUrl = user.verificationImage;
+          if(profileImage) {
+              imageUrl = await api.uploadImage(profileImage);
+          }
+
+          const res = await api.updateProfile({
+              name: editData.name,
+              email: editData.email,
+              phone: editData.phone,
+              password: editData.password || undefined,
+              verificationImage: imageUrl
+          });
+
+          if(res.success) {
+              setUser(res.user);
+              localStorage.setItem('customerUser', JSON.stringify(res.user));
+              alert("Profile updated successfully");
+              setShowEditProfile(false);
+              setEditData(prev => ({...prev, password: '', confirmPassword: ''})); // Clear pass
+          }
+      } catch (e: any) {
+          alert(e.message || "Failed to update profile");
+      } finally {
+          setIsUpdating(false);
+      }
+  };
+
   const handleToggle2FA = async () => {
       if (!confirm(`Are you sure you want to ${user.isTwoFactorEnabled ? 'disable' : 'enable'} Two-Factor Authentication?`)) return;
       try {
@@ -127,9 +185,25 @@ const CustomerDashboard: React.FC = () => {
         
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-           <div>
-              <h1 className="text-3xl font-bold text-slate-900">Hello, {user?.name}</h1>
-              <p className="text-slate-500">Welcome to your dashboard.</p>
+           <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-white rounded-full overflow-hidden border border-slate-200 shadow-sm flex-shrink-0">
+                  {user?.verificationImage ? (
+                      <img src={user.verificationImage} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                          <User size={24} />
+                      </div>
+                  )}
+              </div>
+              <div>
+                  <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
+                      Hello, {user?.name}
+                      <button onClick={() => setShowEditProfile(true)} className="text-slate-400 hover:text-primary-600 transition">
+                          <Edit size={18} />
+                      </button>
+                  </h1>
+                  <p className="text-slate-500">Welcome to your dashboard.</p>
+              </div>
            </div>
            <div className="flex gap-3">
               <Button to="/store" variant="outline" size="sm">New Order</Button>
@@ -385,6 +459,66 @@ const CustomerDashboard: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      {showEditProfile && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Profile</h3>
+                  
+                  <div className="flex justify-center mb-6">
+                      <label className="relative cursor-pointer group">
+                          <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-slate-200 group-hover:border-primary-500 transition">
+                              {profileImagePreview ? (
+                                  <img src={profileImagePreview} alt="Profile" className="w-full h-full object-cover" />
+                              ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                                      <User size={32} />
+                                  </div>
+                              )}
+                          </div>
+                          <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                              <Camera className="text-white" size={24} />
+                          </div>
+                          <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageChange} />
+                      </label>
+                  </div>
+
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                          <input className={inputVisibleClass} value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
+                          <input className={inputVisibleClass} type="email" value={editData.email} onChange={e => setEditData({...editData, email: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                          <input className={inputVisibleClass} value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} />
+                      </div>
+                      <div className="border-t pt-4 mt-2">
+                          <p className="text-xs text-slate-400 mb-2 italic">Change Password (Optional)</p>
+                          <div className="space-y-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
+                                  <input type="password" className={inputVisibleClass} placeholder="New password" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                                  <input type="password" className={inputVisibleClass} placeholder="Confirm new password" value={editData.confirmPassword} onChange={e => setEditData({...editData, confirmPassword: e.target.value})} />
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-6">
+                      <button onClick={() => setShowEditProfile(false)} className="flex-1 py-2 text-slate-500 hover:bg-slate-50 rounded-lg font-medium">Cancel</button>
+                      <Button onClick={handleUpdateProfile} className="flex-1 py-2" disabled={isUpdating}>{isUpdating ? 'Saving...' : 'Save Changes'}</Button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Rating Modal */}
       {ratingModal && (

@@ -1,10 +1,14 @@
+
 const crypto = require('crypto');
 
-let ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012'; // Must be 32 chars
+let ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
 // Safeguard: Ensure key is 32 bytes for AES-256
-if (ENCRYPTION_KEY.length !== 32) {
-    console.warn("⚠️ Warning: ENCRYPTION_KEY length is not 32 characters. Falling back to default secure key to prevent crash.");
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 32) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error("CRITICAL SECURITY ERROR: ENCRYPTION_KEY must be exactly 32 characters in production.");
+    }
+    console.warn("⚠️ Warning: ENCRYPTION_KEY is missing or invalid. Using insecure dev fallback.");
     ENCRYPTION_KEY = '12345678901234567890123456789012';
 }
 

@@ -1,8 +1,10 @@
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Ensure 'images' directory exists
 const uploadDir = path.join(__dirname, '../images');
@@ -16,7 +18,10 @@ const storage = multer.diskStorage({
         cb(null, 'images/');
     },
     filename(req, file, cb) {
-        cb(null, `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
+        // Generate a random filename to prevent overwriting and malicious naming
+        const randomName = crypto.randomBytes(16).toString('hex');
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `${file.fieldname}-${randomName}${ext}`);
     }
 });
 
@@ -29,12 +34,13 @@ function checkFileType(file, cb) {
     if (extname && mimetype) {
         return cb(null, true);
     } else {
-        cb('Images only!');
+        cb(new Error('Images only!'));
     }
 }
 
 const upload = multer({
     storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB Limit
     fileFilter: function(req, file, cb) {
         checkFileType(file, cb);
     }

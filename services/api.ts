@@ -203,7 +203,9 @@ export const api = {
             email: data.email,
             role: data.role,
             technicianId: data.technicianId,
-            isTwoFactorEnabled: data.isTwoFactorEnabled
+            isTwoFactorEnabled: data.isTwoFactorEnabled,
+            phone: data.phone,
+            verificationImage: data.verificationImage
         },
         isAdmin: data.isAdmin
       };
@@ -293,7 +295,9 @@ export const api = {
                 email: result.email,
                 role: result.role,
                 technicianId: result.technicianId,
-                isTwoFactorEnabled: result.isTwoFactorEnabled
+                isTwoFactorEnabled: result.isTwoFactorEnabled,
+                phone: result.phone,
+                verificationImage: result.verificationImage
             },
             isAdmin: result.isAdmin
           };
@@ -324,6 +328,27 @@ export const api = {
         const user = MOCK_USERS.find(u => u.id === userId);
         if (user) user.status = 'Active'; 
         return { success: true };
+      }
+  },
+
+  updateProfile: async (userData: any) => {
+      try {
+          const result = await authFetch('/auth/profile', {
+              method: 'PUT',
+              body: JSON.stringify(userData)
+          });
+          return { success: true, user: {
+              id: result._id,
+              name: result.name,
+              email: result.email,
+              role: result.role,
+              technicianId: result.technicianId,
+              isTwoFactorEnabled: result.isTwoFactorEnabled,
+              phone: result.phone,
+              verificationImage: result.verificationImage
+          }};
+      } catch (e) {
+          throw e;
       }
   },
 

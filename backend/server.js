@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -5,6 +6,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-clean');
 const path = require('path');
 
 const connectDB = require('./config/db');
@@ -49,17 +52,34 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '10mb' }));
+// Data Sanitization against NoSQL query injection
+app.use(mongoSanitize());
+// Data Sanitization against XSS
+app.use(xss());
+
 app.use(morgan('dev'));
 
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute window
+// Rate Limiting - General API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300, // Limit each IP to 300 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many requests from this IP, please try again later.'
 });
-app.use('/api', limiter);
+
+// Rate Limiting - Strict Auth (Brute force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login/register attempts
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many login attempts, please try again after 15 minutes.'
+});
+
+// Apply limiters
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
 
 // 3. Static Folder
 const imagesPath = path.join(__dirname, 'images');

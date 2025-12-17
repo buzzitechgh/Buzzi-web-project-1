@@ -1,6 +1,7 @@
+
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, verifyEmail, verifyTwoFactorLogin, resendOtp, toggleTwoFactor, approveUser } = require('../controllers/authController');
+const { registerUser, loginUser, verifyEmail, verifyTwoFactorLogin, resendOtp, toggleTwoFactor, approveUser, updateUserProfile } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 router.post('/register', registerUser);
@@ -10,5 +11,6 @@ router.post('/verify-2fa', verifyTwoFactorLogin);
 router.post('/resend-otp', resendOtp);
 router.put('/toggle-2fa', protect, toggleTwoFactor);
 router.put('/approve/:id', protect, admin, approveUser);
+router.put('/profile', protect, updateUserProfile);
 
 module.exports = router;

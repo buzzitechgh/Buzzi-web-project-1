@@ -1,5 +1,7 @@
+
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs'); // Needed for dummy check
 const { sendVerificationEmail, sendWelcomeEmail, sendEmail } = require('../services/emailService');
 const SystemSetting = require('../models/SystemSetting');
 
@@ -88,11 +90,11 @@ const verifyEmail = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(400).json({ message: 'User not found' });
+            // Return generic error for security
+            return res.status(400).json({ message: 'Invalid verification details' });
         }
 
         if (user.isVerified) {
-            // Even if verified, check approval for login logic later
             return res.status(200).json({ success: true, message: 'User already verified. Please login.' });
         }
 
@@ -147,7 +149,7 @@ const verifyTwoFactorLogin = async (req, res) => {
     try {
         const user = await User.findOne({ email });
 
-        if (!user) return res.status(400).json({ message: 'User not found' });
+        if (!user) return res.status(400).json({ message: 'Invalid details' });
 
         if (user.otp !== code || user.otpExpires < Date.now()) {
             return res.status(400).json({ message: 'Invalid or expired 2FA code' });
@@ -181,7 +183,8 @@ const resendOtp = async (req, res) => {
     const { email } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        // Don't reveal if user exists
+        if (!user) return res.status(200).json({ success: true, message: 'If this email exists, a code has been sent.' });
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         user.otp = otp;
@@ -204,7 +207,14 @@ const loginUser = async (req, res) => {
   try {
     const user = await User.findOne({ email });
 
-    if (user && (await user.matchPassword(password))) {
+    // Timing Attack Mitigation: Always compare password, even if user null
+    if (!user) {
+        // Dummy comparison to consume time similar to a real comparison
+        await bcrypt.compare(password, '$2a$10$abcdefghijklmnopqrstuvwxyz123456');
+        return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (await user.matchPassword(password)) {
       
       // 1. Check Email Verification
       if (!user.isVerified) {
@@ -257,6 +267,8 @@ const loginUser = async (req, res) => {
         isAdmin: user.isAdmin || user.role === 'admin',
         technicianId: user.technicianId,
         isTwoFactorEnabled: user.isTwoFactorEnabled,
+        verificationImage: user.verificationImage,
+        phone: user.phone,
         token: generateToken(user._id),
       });
     } else {
@@ -315,4 +327,48 @@ const approveUser = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, verifyEmail, verifyTwoFactorLogin, resendOtp, loginUser, toggleTwoFactor, approveUser };
+// @desc    Update User Profile
+// @route   PUT /api/auth/profile
+// @access  Private
+const updateUserProfile = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    user.name = req.body.name || user.name;
+    user.phone = req.body.phone || user.phone;
+    
+    // Check if email is being updated and is unique
+    if (req.body.email && req.body.email !== user.email) {
+        const userExists = await User.findOne({ email: req.body.email });
+        if (userExists) {
+            return res.status(400).json({ message: 'Email already in use' });
+        }
+        user.email = req.body.email;
+    }
+
+    if (req.body.verificationImage) {
+        user.verificationImage = req.body.verificationImage;
+    }
+    if (req.body.password) {
+      user.password = req.body.password;
+    }
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      phone: updatedUser.phone,
+      technicianId: updatedUser.technicianId,
+      verificationImage: updatedUser.verificationImage,
+      isTwoFactorEnabled: updatedUser.isTwoFactorEnabled,
+      token: generateToken(updatedUser._id),
+    });
+  } else {
+    res.status(404).json({ message: 'User not found' });
+  }
+};
+
+module.exports = { registerUser, verifyEmail, verifyTwoFactorLogin, resendOtp, loginUser, toggleTwoFactor, approveUser, updateUserProfile };

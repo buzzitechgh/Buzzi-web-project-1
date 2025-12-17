@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, CheckCircle, Clock, Star, LogOut, MapPin, Calendar, Monitor, Video, MessageSquare, Send, X, AlertCircle, Key } from 'lucide-react';
+import { Wrench, CheckCircle, Clock, Star, LogOut, MapPin, Calendar, Monitor, Video, MessageSquare, Send, X, AlertCircle, Key, Edit, User, Camera, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { api } from '../services/api';
 import Logo from '../components/Logo';
 import { Meeting, ChatMessage } from '../types';
+import Button from '../components/Button';
 
 const TechnicianDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +26,16 @@ const TechnicianDashboard: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState("");
   const [verifyError, setVerifyError] = useState("");
 
+  // Edit Profile State
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editData, setEditData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Styles
+  const inputVisibleClass = "w-full border border-slate-400 bg-slate-50 p-3 rounded-lg text-sm outline-none focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all text-slate-900 placeholder-slate-400 font-medium";
+
   useEffect(() => {
     const storedTech = localStorage.getItem('techUser');
     if (!storedTech) {
@@ -32,6 +44,8 @@ const TechnicianDashboard: React.FC = () => {
     }
     const parsedTech = JSON.parse(storedTech);
     setTech(parsedTech);
+    setEditData({ name: parsedTech.name || '', email: parsedTech.email || '', phone: parsedTech.phone || '', password: '', confirmPassword: '' });
+    if(parsedTech.verificationImage) setProfileImagePreview(parsedTech.verificationImage);
     fetchData(parsedTech.name);
   }, [navigate]);
 
@@ -54,6 +68,64 @@ const TechnicianDashboard: React.FC = () => {
     localStorage.removeItem('techToken');
     localStorage.removeItem('techUser');
     navigate('/login');
+  };
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(file) {
+          setProfileImage(file);
+          const reader = new FileReader();
+          reader.onloadend = () => setProfileImagePreview(reader.result as string);
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleUpdateProfile = async () => {
+      if (editData.password && editData.password !== editData.confirmPassword) {
+          alert("Passwords do not match!");
+          return;
+      }
+
+      setIsUpdating(true);
+      try {
+          let imageUrl = tech.verificationImage;
+          if(profileImage) {
+              imageUrl = await api.uploadImage(profileImage);
+          }
+
+          const res = await api.updateProfile({
+              name: editData.name,
+              email: editData.email,
+              phone: editData.phone,
+              password: editData.password || undefined,
+              verificationImage: imageUrl
+          });
+
+          if(res.success) {
+              setTech(res.user);
+              localStorage.setItem('techUser', JSON.stringify(res.user));
+              alert("Profile updated successfully");
+              setShowEditProfile(false);
+              setEditData(prev => ({...prev, password: '', confirmPassword: ''}));
+          }
+      } catch (e: any) {
+          alert(e.message || "Failed to update profile");
+      } finally {
+          setIsUpdating(false);
+      }
+  };
+
+  const handleToggle2FA = async () => {
+      if (!confirm(`Are you sure you want to ${tech.isTwoFactorEnabled ? 'disable' : 'enable'} Two-Factor Authentication?`)) return;
+      try {
+          const res = await api.toggleTwoFactor();
+          const updatedUser = { ...tech, isTwoFactorEnabled: res.isTwoFactorEnabled };
+          setTech(updatedUser);
+          localStorage.setItem('techUser', JSON.stringify(updatedUser));
+          alert(res.message);
+      } catch (e) {
+          alert("Failed to update security settings.");
+      }
   };
 
   const handleLaunchRemote = (tool: 'anydesk' | 'teamviewer' | 'rustdesk') => {
@@ -153,9 +225,20 @@ const TechnicianDashboard: React.FC = () => {
           {/* LEFT COLUMN: Profile & Tools */}
           <div className="md:col-span-1 space-y-6">
               {/* Profile Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                 <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mx-auto mb-4">
-                    <Wrench size={32} />
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center relative group">
+                 <button 
+                    onClick={() => setShowEditProfile(true)} 
+                    className="absolute top-2 right-2 p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-full transition"
+                    title="Edit Profile"
+                 >
+                    <Edit size={16} />
+                 </button>
+                 <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mx-auto mb-4 overflow-hidden border border-slate-200">
+                    {tech?.verificationImage ? (
+                        <img src={tech.verificationImage} alt="Tech" className="w-full h-full object-cover" />
+                    ) : (
+                        <Wrench size={32} />
+                    )}
                  </div>
                  <h1 className="text-xl font-bold text-slate-900">{tech?.name}</h1>
                  <p className="text-slate-500 text-sm mb-4">{tech?.role} • {tech?.status}</p>
@@ -171,6 +254,36 @@ const TechnicianDashboard: React.FC = () => {
                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-bold">Tasks</p>
                     </div>
                  </div>
+              </div>
+
+              {/* Security Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                       <ShieldCheck className="text-green-600" size={18} /> Account Security
+                   </h3>
+                   <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                           <div className={`p-2 rounded-full ${tech.isTwoFactorEnabled ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>
+                               {tech.isTwoFactorEnabled ? <Lock size={16} /> : <Unlock size={16} />}
+                           </div>
+                           <div>
+                               <p className="text-sm font-bold text-slate-800">2FA</p>
+                               <p className="text-[10px] text-slate-500">Login Protection</p>
+                           </div>
+                       </div>
+                       <div className="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+                           <input 
+                               type="checkbox" 
+                               name="toggle" 
+                               id="toggle" 
+                               className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300"
+                               style={{ right: tech.isTwoFactorEnabled ? '0' : '50%', borderColor: tech.isTwoFactorEnabled ? '#22c55e' : '#cbd5e1' }}
+                               checked={tech.isTwoFactorEnabled || false}
+                               onChange={handleToggle2FA}
+                           />
+                           <label htmlFor="toggle" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${tech.isTwoFactorEnabled ? 'bg-green-500' : 'bg-slate-300'}`}></label>
+                       </div>
+                   </div>
               </div>
 
               {/* Remote Tools */}
@@ -412,6 +525,66 @@ const TechnicianDashboard: React.FC = () => {
                 </div>
             </div>
         )}
+
+        {/* Edit Profile Modal */}
+        {showEditProfile && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Profile</h3>
+                  
+                  <div className="flex justify-center mb-6">
+                      <label className="relative cursor-pointer group">
+                          <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-slate-200 group-hover:border-primary-500 transition">
+                              {profileImagePreview ? (
+                                  <img src={profileImagePreview} alt="Profile" className="w-full h-full object-cover" />
+                              ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                                      <User size={32} />
+                                  </div>
+                              )}
+                          </div>
+                          <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                              <Camera className="text-white" size={24} />
+                          </div>
+                          <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageChange} />
+                      </label>
+                  </div>
+
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                          <input className={inputVisibleClass} value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
+                          <input className={inputVisibleClass} type="email" value={editData.email} onChange={e => setEditData({...editData, email: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                          <input className={inputVisibleClass} value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} />
+                      </div>
+                      <div className="border-t pt-4 mt-2">
+                          <p className="text-xs text-slate-400 mb-2 italic">Change Password (Optional)</p>
+                          <div className="space-y-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
+                                  <input type="password" className={inputVisibleClass} placeholder="New password" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                                  <input type="password" className={inputVisibleClass} placeholder="Confirm new password" value={editData.confirmPassword} onChange={e => setEditData({...editData, confirmPassword: e.target.value})} />
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-6">
+                      <button onClick={() => setShowEditProfile(false)} className="flex-1 py-2 text-slate-500 hover:bg-slate-50 rounded-lg font-medium">Cancel</button>
+                      <Button onClick={handleUpdateProfile} className="flex-1 py-2" disabled={isUpdating}>{isUpdating ? 'Saving...' : 'Save Changes'}</Button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

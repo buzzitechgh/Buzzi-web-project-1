@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Lock, Wrench, Shield, UserPlus, ArrowLeft, Key, AlertCircle, CheckCircle, Mail, Hash, Camera, Upload } from 'lucide-react';
@@ -18,6 +19,7 @@ const Login: React.FC = () => {
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
   
   // Technician Specific Registration
   const [techDepartment, setTechDepartment] = useState('Infrastructure');
@@ -38,6 +40,9 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  // Shared visible input style
+  const inputVisibleClass = "w-full border border-slate-400 bg-slate-50 rounded-lg px-4 py-2.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none placeholder-slate-400 transition-all font-medium";
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -108,6 +113,12 @@ const Login: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError('');
+
+      if (regPassword !== regConfirmPassword) {
+          setError("Passwords do not match");
+          setLoading(false);
+          return;
+      }
 
       try {
           let imageUrl = '';
@@ -381,15 +392,15 @@ const Login: React.FC = () => {
                    <div className="grid grid-cols-2 gap-4">
                        <div className="col-span-2">
                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Full Name</label>
-                           <input type="text" required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="John Doe" value={regName} onChange={e => setRegName(e.target.value)} />
+                           <input type="text" required className={inputVisibleClass} placeholder="John Doe" value={regName} onChange={e => setRegName(e.target.value)} />
                        </div>
                        <div className="col-span-2">
                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Email Address</label>
-                           <input type="email" required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="name@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
+                           <input type="email" required className={inputVisibleClass} placeholder="name@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
                        </div>
                        <div className="col-span-2">
                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Phone Number</label>
-                           <input type="tel" required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="050..." value={regPhone} onChange={e => setRegPhone(e.target.value)} />
+                           <input type="tel" required className={inputVisibleClass} placeholder="050..." value={regPhone} onChange={e => setRegPhone(e.target.value)} />
                        </div>
                        
                        {/* Technician Specific Fields */}
@@ -397,7 +408,7 @@ const Login: React.FC = () => {
                            <>
                                <div className="col-span-1">
                                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Department</label>
-                                   <select className="w-full border border-gray-300 rounded-lg px-2 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none text-xs" value={techDepartment} onChange={e => setTechDepartment(e.target.value)}>
+                                   <select className={`${inputVisibleClass} text-xs py-3`} value={techDepartment} onChange={e => setTechDepartment(e.target.value)}>
                                        <option value="Infrastructure">Infrastructure</option>
                                        <option value="Security">Security (CCTV)</option>
                                        <option value="IT Support">IT Support</option>
@@ -406,7 +417,7 @@ const Login: React.FC = () => {
                                </div>
                                <div className="col-span-1">
                                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Role</label>
-                                   <select className="w-full border border-gray-300 rounded-lg px-2 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none text-xs" value={techSubRole} onChange={e => setTechSubRole(e.target.value)}>
+                                   <select className={`${inputVisibleClass} text-xs py-3`} value={techSubRole} onChange={e => setTechSubRole(e.target.value)}>
                                        <option value="Network Engineer">Network Engineer</option>
                                        <option value="CCTV Specialist">CCTV Specialist</option>
                                        <option value="Field Technician">Field Technician</option>
@@ -442,7 +453,11 @@ const Login: React.FC = () => {
 
                        <div className="col-span-2">
                            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Password</label>
-                           <input type="password" required className="w-full border border-gray-300 rounded-lg px-4 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="Create password" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+                           <input type="password" required className={inputVisibleClass} placeholder="Create password" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+                       </div>
+                       <div className="col-span-2">
+                           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Confirm Password</label>
+                           <input type="password" required className={inputVisibleClass} placeholder="Re-enter password" value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} />
                        </div>
                    </div>
                    <Button type="submit" className="w-full py-3 mt-4" disabled={loading}>
